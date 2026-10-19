@@ -16,5 +16,6 @@ def connect(url: str | None = None) -> psycopg.Connection:
 def init(url: str | None = None) -> None:
     """Create tables, seed reference data and create views. Safe to run on every start."""
     with connect(url) as conn:
+        conn.execute("SELECT pg_advisory_xact_lock(724)")  # worker and dashboard both run this; one at a time
         for name in SQL_FILES:
             conn.execute((SQL_DIR / name).read_text())

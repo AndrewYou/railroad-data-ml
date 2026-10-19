@@ -86,26 +86,27 @@ def volume(weekly: pd.DataFrame, metric: str, since: pd.Timestamp, height: int) 
         else:
             fig.add_scatter(x=g["week_ending"], y=g["carloads"], name=group, line=dict(color=color, width=2),
                             hovertemplate="%{y:,.0f}")
-            if rows["group"].nunique() == 1:  # one series: show last year behind it
-                fig.add_scatter(x=g["week_ending"], y=g["carloads_ly"], name="Same Week Last Year",
-                                line=dict(color=P.baseline, width=2), hovertemplate="%{y:,.0f}")
     if metric == "YoY %":
         zero_line(fig)
     return styled(fig, height, "YoY %, 4-Week Total" if metric == "YoY %" else "Carloads / Week")
 
 
-def drivers(df: pd.DataFrame, height: int) -> go.Figure:
-    colors = [P.better if v >= 0 else P.worse for v in df["Contribution (pp)"]]
-    fig = go.Figure(go.Bar(
-        x=df["Contribution (pp)"], y=df.index, orientation="h", marker=dict(color=colors, cornerradius=4),
-        customdata=df[["Change vs LY", "YoY %"]],
-        hovertemplate="<b>%{y}</b><br>%{customdata[0]:+,.0f} carloads (%{customdata[1]:+.1f}% YoY)"
-                      "<br>%{x:+.2f} pp of the network's YoY change<extra></extra>"))
-    fig.add_vline(x=0, line_width=1, line_color=P.baseline)
-    fig = styled(fig, height, hover="closest")
-    fig.update_xaxes(title="Contribution to Network YoY Change (Percentage Points)", title_font_size=11,
-                     showgrid=True, gridcolor=P.grid)
-    fig.update_yaxes(gridcolor=P.surface, tickfont=dict(size=11), tickmode="array", tickvals=list(df.index))
+def drivers(df: pd.DataFrame, network_yoy: float, height: int) -> go.Figure:
+    """Waterfall: each driver's points of YoY change, stepping from 0 to the network's YoY %."""
+    df = df.sort_values("Contribution (pp)", ascending=False)
+    labels = [*df.index, "Network"]
+    values = [*df["Contribution (pp)"], network_yoy]
+    changes = [*df["Change vs LY"], None]
+    fig = go.Figure(go.Waterfall(
+        x=labels, y=values, measure=["relative"] * len(df) + ["total"],
+        text=[f"{v:+.1f}" for v in values], textposition="outside", textfont=dict(size=11, color=P.ink_2),
+        increasing=dict(marker=dict(color=P.better)), decreasing=dict(marker=dict(color=P.worse)),
+        totals=dict(marker=dict(color=P.muted)), connector=dict(line=dict(color=P.baseline, width=1)),
+        customdata=changes,
+        hovertemplate="<b>%{x}</b><br>%{y:+.2f} pts of network YoY<br>%{customdata:+,.0f} carloads<extra></extra>"))
+    fig = styled(fig, height, "YoY Change (Percentage Points)", hover="closest")
+    fig.update_xaxes(tickfont=dict(size=11))
+    fig.update_yaxes(ticksuffix="", zeroline=True, zerolinecolor=P.baseline)
     return fig
 
 

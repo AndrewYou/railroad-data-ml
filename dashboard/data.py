@@ -11,7 +11,8 @@ from psycopg.types.numeric import FloatLoader
 from rail import db
 
 YEAR = pd.Timedelta(days=364)
-RECENT_WEEKS = 4  # "latest" on the map = the last 4 weeks, which smooths one-off weeks
+ROLLING_WEEKS = 4  # YoY % lines use 4-week totals, which smooth one-off weeks
+WINDOWS = {"1 Week": 1, "2 Weeks": 2, "4 Weeks": 4}  # windows for the map and the drivers
 SEGMENTS = ("Intermodal", "Coal", "Merchandise")
 SHARE_GROUPS = {  # railroads that compete for the same freight; None = the whole network
     "All Railroads": None, "West: UP vs. BNSF": ("UP", "BNSF"), "East: CSX vs. NS": ("CSX", "NS")}
@@ -118,21 +119,30 @@ def quarters(df: pd.DataFrame) -> list[pd.Period]:
     return sorted(df["week_ending"].dt.to_period("Q").unique(), reverse=True)
 
 
+def total(orig: pd.DataFrame, first, last, by: list[str]) -> pd.Series:
+    """Carloads for weeks ending first..last, per group (or one 'Network' row)."""
+    rows = orig[orig["week_ending"].between(first, last)]
+    return rows.groupby(by)["carloads"].sum() if by else pd.Series({"Network": rows["carloads"].sum()})
+
+
+def period(first: pd.Timestamp, last: pd.Timestamp) -> dict:
+    """Display strings for a period and the same weeks a year earlier."""
+    return {"weeks": int((last - first).days // 7 + 1),
+            "first": f"{first:%b %d}", "through": f"{last:%b %d, %Y}",
+            "first_ly": f"{first - YEAR:%b %d}", "through_ly": f"{last - YEAR:%b %d, %Y}"}
+
+
 def quarter_to_date(orig: pd.DataFrame, quarter: pd.Period, by: list[str]) -> pd.DataFrame:
     """Quarter-to-date carloads vs the same weeks last year, and a projection for the full quarter.
 
     Projection = carloads so far + last year's remaining weeks grown at this quarter's YoY rate.
     """
     start, end = quarter.start_time, quarter.end_time
-    latest = orig.loc[orig["week_ending"].between(start, end), "week_ending"].max()
-
-    def total(first, last):
-        rows = orig[orig["week_ending"].between(first, last)]
-        return rows.groupby(by)["carloads"].sum() if by else pd.Series({"Network": rows["carloads"].sum()})
-
-    qtd = total(start, latest)
-    qtd_ly = total(start - YEAR, latest - YEAR)
-    rest_ly = total(latest - YEAR + pd.Timedelta(days=1), end - YEAR)
+    weeks = orig.loc[orig["week_ending"].between(start, end), "week_ending"]
+    first, latest = weeks.min(), weeks.max()
+    qtd = total(orig, start, latest, by)
+    qtd_ly = total(orig, start - YEAR, latest - YEAR, by)
+    rest_ly = total(orig, latest - YEAR + pd.Timedelta(days=1), end - YEAR, by)
     yoy = pct_change(qtd, qtd_ly)
     out = pd.DataFrame({
         "QTD carloads": qtd,
@@ -142,28 +152,35 @@ def quarter_to_date(orig: pd.DataFrame, quarter: pd.Period, by: list[str]) -> pd
         "Last year's quarter": qtd_ly + rest_ly.reindex(qtd.index, fill_value=0),
     })
     out["Change vs LY"] = out["QTD carloads"] - out["QTD last year"]
-    first = orig.loc[orig["week_ending"] >= start, "week_ending"].min()
-    out.attrs = {"weeks": int((latest - first).days // 7 + 1),  # strings: attrs must stay serializable
-                 "first": f"{first:%b %d}", "through": f"{latest:%b %d, %Y}",
-                 "first_ly": f"{first - YEAR:%b %d}", "through_ly": f"{latest - YEAR:%b %d, %Y}"}
+    out.attrs = period(first, latest)
     return out
 
 
-def drivers(orig: pd.DataFrame, quarter: pd.Period, by: str) -> pd.DataFrame:
-    """Each group's share of the network's YoY change, in percentage points."""
-    t = quarter_to_date(orig, quarter, [by])
-    network_ly = t["QTD last year"].sum()
-    t["Contribution (pp)"] = t["Change vs LY"] / network_ly * 100
-    return t.sort_values("Contribution (pp)")
+def drivers(orig: pd.DataFrame, weeks: int, by: str, top: int = 6) -> pd.DataFrame:
+    """The latest `weeks` vs the same weeks last year: each group's change as points of the network's YoY %.
+
+    Contributions add up to the network's YoY %. Groups beyond the `top` largest are folded into 'All Other'.
+    """
+    last = orig["week_ending"].max()
+    first = last - pd.Timedelta(weeks=weeks - 1)
+    now, before = total(orig, first, last, [by]), total(orig, first - YEAR, last - YEAR, [by])
+    change = (now - before.reindex(now.index, fill_value=0)).sort_values(key=abs, ascending=False)
+    if len(change) > top + 1:
+        others = change.iloc[top:]
+        change = pd.concat([change.iloc[:top], pd.Series({f"All Other ({len(others)})": others.sum()})])
+    out = pd.DataFrame({"Change vs LY": change, "Contribution (pp)": change / before.sum() * 100})
+    out.attrs = period(first, last) | {"network_change": float(now.sum() - before.sum()),
+                                       "network_yoy": float((now.sum() / before.sum() - 1) * 100)}
+    return out
 
 
 def weekly_volume(orig: pd.DataFrame, by: str | None) -> pd.DataFrame:
-    """Weekly originated carloads per group, with last year and a 4-week YoY %."""
+    """Weekly originated carloads per group, and YoY % on 4-week totals."""
     group = orig[by] if by else pd.Series("Network", index=orig.index)
     weekly = orig.assign(group=group).groupby(["group", "week_ending"], as_index=False)["carloads"].sum()
     weekly = with_last_year(weekly, ["group"], "carloads")
     rolled = weekly.sort_values("week_ending").groupby("group")[["carloads", "carloads_ly"]].transform(
-        lambda s: s.rolling(RECENT_WEEKS).sum())
+        lambda s: s.rolling(ROLLING_WEEKS).sum())
     weekly["yoy_4wk"] = pct_change(rolled["carloads"], rolled["carloads_ly"])
     return weekly
 
@@ -185,7 +202,7 @@ def service_yoy(svc: pd.DataFrame, measure: str) -> pd.DataFrame:
     """Each railroad's metric vs its own same 4 weeks last year, in %."""
     rows = svc[svc["measure"] == measure][["week_ending", "railroad", "value"]]
     rows = with_last_year(rows, ["railroad"], "value").sort_values("week_ending")
-    rolled = rows.groupby("railroad")[["value", "value_ly"]].transform(lambda s: s.rolling(RECENT_WEEKS).mean())
+    rolled = rows.groupby("railroad")[["value", "value_ly"]].transform(lambda s: s.rolling(ROLLING_WEEKS).mean())
     rows["yoy_4wk"] = pct_change(rolled["value"], rolled["value_ly"])
     return rows
 
@@ -202,11 +219,11 @@ def by_week_of_year(series: pd.DataFrame, value: str) -> pd.DataFrame:
     return history.join(pivot, how="outer").reset_index()
 
 
-def recent_vs_last_year(df: pd.DataFrame, keys: list[str], value: str, how: str) -> pd.DataFrame:
-    """The latest 4 weeks vs the same 4 weeks last year, per group (for the map)."""
+def recent_vs_last_year(df: pd.DataFrame, keys: list[str], value: str, how: str, weeks: int) -> pd.DataFrame:
+    """The latest `weeks` vs the same weeks last year, per group (for the map and terminals table)."""
     df = with_last_year(df, keys, value)
     latest = df["week_ending"].max()
-    recent = df[df["week_ending"] > latest - pd.Timedelta(weeks=RECENT_WEEKS)]
+    recent = df[df["week_ending"] > latest - pd.Timedelta(weeks=weeks)]
     out = recent.groupby(keys, as_index=False)[[value, f"{value}_ly"]].agg(how)
     out["yoy"] = pct_change(out[value], out[f"{value}_ly"])
     out.attrs["through"] = str(latest.date())

@@ -12,7 +12,8 @@ Full design notes: `docs/DESIGN.md`. Schema: `sql/schema.sql`. Pipeline: `rail/`
 - Checks are row-level where possible: failing rows are held back (`ops.issue`, action `held`) and never overwrite a published value. Dataset-level problems are flagged. Check list lives in `rail/checks.py` and README.
 - Restatements are recorded in `ops.revision` and summarised in the run email.
 - Alerts: email via SMTP to Mailpit (local, no credentials). Everything runs from `docker compose up`.
-- Dashboard (Streamlit + Plotly, `dashboard/`): one screen: US map (terminal dwell / grain by state / coal by basin), volume, drivers, service vs own history, market share, tables. Excel/PNG/CSV export. Light+dark themes via Streamlit settings; charts read `st.context.theme`. Logic in `sql/views.sql` (`mart`).
+- Dashboard ("Daniel Plainview's Dashboard", Streamlit + Plotly, `dashboard/`): one screen: US map (terminal dwell / grain by state / coal by basin), volume, drivers, service vs own history, market share, tables. Excel/PNG/CSV export. Light+dark themes via Streamlit settings; charts read `st.context.theme`. Logic in `sql/views.sql` (`mart`).
+- Both worker and dashboard containers run `db.init()` on start (advisory lock serializes them), so `mart` views always match the deployed code. Rebuild with `docker compose up -d --build` (all services).
 - Coal loadings units differ by railroad (CSX carloads, others unit trains): never sum across railroads.
 - Next phase: ML (user plans to add it after the dashboard).
 - Skipped for now (note in write-up as future work): volume-swing bounds, share-of-network bounds, service value range checks. No composite "service scorecard" (user: too black-box for investors).

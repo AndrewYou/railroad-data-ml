@@ -32,16 +32,16 @@ docker compose run --rm worker python -m pytest -q     # run the tests
 
 ## Dashboard
 
-One screen, filtered by railroad and quarter from the top bar:
+"Daniel Plainview's Dashboard": one screen, filtered by railroad from the top bar:
 
 | Panel | Question it answers | Toggles |
 |---|---|---|
-| **Map** | Where is the network congested, and where is grain or coal moving vs last year? | Terminal Dwell (click a terminal to chart it) · Grain Cars Loaded · Grain Car Orders · Grain Shuttle Turns · Coal Loadings. These are the only measures reported by place; the rest are system-wide per railroad |
-| **What's moving** | Weekly originated carloads, this year vs last | Carloads / YoY % · Network / Segment / Railroad · 1Y / 2Y / 5Y |
-| **What's driving it** | Quarter to date vs the same weeks a year earlier: each commodity's, railroad's or segment's change divided by last year's network total, so the bars add up to the network's YoY % | Commodity / Railroad / Segment |
+| **Map** | Where is the network congested, and where is grain or coal moving vs last year? | 1 / 2 / 4 Weeks · Terminal Dwell (click a terminal to chart it) · Grain Cars Loaded · Grain Car Orders · Grain Shuttle Turns · Coal Loadings. These are the only measures reported by place; the rest are system-wide per railroad |
+| **What's moving** | Weekly originated carloads, and YoY % on 4-week totals | Carloads / YoY % · Network / Segment / Railroad · 1Y / 2Y / 5Y (how far back) |
+| **What's driving it** | Waterfall: the latest 1, 2 or 4 weeks vs the same weeks a year earlier. Each commodity's, railroad's or segment's change in points of the network's YoY %, stepping from 0 to the network total | 1 / 2 / 4 Weeks · Commodity / Railroad / Segment |
 | **Service** | Is service improving? Each railroad vs its own history only | Vs. History (one railroad) / YoY % (All) · Speed / Dwell / Cars Online |
 | **Market share** | Share between direct competitors (UP vs BNSF in the West, CSX vs NS in the East), or of the whole network | All Railroads / West / East · Segment · Commodity |
-| **Tables** | Quarter-to-date tracker with projection (formula in the column tooltip), commodities, terminals | Sort by clicking a column; search from the table toolbar |
+| **Tables** | Quarter-to-date tracker with projection (formula in the column tooltip), commodities, terminals | Quarter picker · sort by clicking a column; search from the table toolbar |
 
 - **Export.** *Excel* (top bar) downloads every table plus the data behind each chart, with an About sheet recording the data week, load time and filters, so saved snapshots are self-describing. Each chart's camera icon saves a 3x PNG for decks; each table's toolbar downloads CSV.
 - **Light / dark.** ⋮ menu → Settings → Theme. Charts follow the app theme.
