@@ -13,8 +13,6 @@ from rail import db
 YEAR = pd.Timedelta(days=364)
 WINDOWS = {"1 Week": 1, "2 Weeks": 2, "4 Weeks": 4}  # one comparison window for every YoY view
 SEGMENTS = ("Intermodal", "Coal", "Merchandise")
-SHARE_GROUPS = {  # railroads that compete for the same freight; None = the whole network
-    "All Railroads": None, "West: UP vs. BNSF": ("UP", "BNSF"), "East: CSX vs. NS": ("CSX", "NS")}
 SERVICE_METRICS = {  # measure -> (label, unit, higher is better)
     "train_speed": ("Train Speed", "MPH", True),
     "terminal_dwell": ("Terminal Dwell", "Hours", False),
@@ -215,10 +213,9 @@ def weekly_volume(orig: pd.DataFrame, by: str | None, weeks: int) -> pd.DataFram
     return weekly
 
 
-def market_share(orig: pd.DataFrame, railroads: tuple[str, ...] | None, segment: str | None,
-                 commodity: str | None) -> pd.DataFrame:
-    """Each railroad's share of the group's originated carloads, 13-week rolling, one column per railroad."""
-    rows = orig if railroads is None else orig[orig["railroad"].isin(railroads)]
+def market_share(orig: pd.DataFrame, segment: str | None, commodity: str | None) -> pd.DataFrame:
+    """Each railroad's share of these railroads' originated carloads, 13-week rolling, one column per railroad."""
+    rows = orig
     if segment:
         rows = rows[rows["segment"] == segment]
     if commodity:

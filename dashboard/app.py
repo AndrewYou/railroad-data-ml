@@ -193,8 +193,7 @@ with service_col, st.container(border=True):
         export[f"{label} YoY"] = yoy
 
 with share_col, st.container(border=True):
-    group_col, seg_col, com_col = panel_header("Market Share (13-Week)", 4.2, 1.5, 1.7, title_width=2.1)
-    group_name = toggle(group_col, list(data.SHARE_GROUPS), "share_group")
+    seg_col, com_col = panel_header("Market Share (13-Week)", 1.5, 1.7, title_width=3.0)
     segment = seg_col.selectbox("Segment", ["All Segments", *data.SEGMENTS], key="share_segment",
                                 label_visibility="collapsed")
     segment = None if segment == "All Segments" else segment
@@ -203,21 +202,13 @@ with share_col, st.container(border=True):
     commodity = com_col.selectbox("Commodity", ["All Commodities", *sorted(options["commodity"])],
                                   key="share_commodity", label_visibility="collapsed")
     commodity = None if commodity == "All Commodities" else commodity
-    group = data.SHARE_GROUPS[group_name]
-    share = data.market_share(orig_all, group, segment, commodity)
+    share = data.market_share(orig, segment, commodity)  # shares of the railroads picked in the top bar
+    st.plotly_chart(charts.share(share, "Share of Selected Railroads, %", CHART_H, 50 if len(railroads) == 2 else None),
+                    config=charts.export_config(f"rail_share_{week.date()}"))
     what = commodity or segment or "all commodities"
-    if group:
-        y_title, reference = "Share of Pair, %", 50
-        note = (f"{group[0]} and {group[1]} compete for the same customers; each line is its share of their "
-                f"combined originated carloads ({what}).")
-    else:
-        y_title, reference = "Share of Network, %", None
-        note = (f"Each railroad's share of all originated carloads ({what}). Reflects network size as much as "
-                "competition: railroads only win share from those serving the same region.")
-    st.plotly_chart(charts.share(share, y_title, CHART_H, reference),
-                    config=charts.export_config(f"rail_share_{group_name}_{week.date()}"))
-    st.caption(note)
-    export[f"Share - {group_name}"] = share
+    st.caption(f"Each railroad's share of the selected railroads' originated carloads ({what}). "
+               "Pick two railroads in the top bar to compare them head to head.")
+    export["Market Share"] = share
 
 
 # Row 3: tables (scoped by quarter) ----------------------------------------------------------

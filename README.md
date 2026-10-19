@@ -40,7 +40,7 @@ docker compose run --rm worker python -m pytest -q     # run the tests
 | **What's moving** | Weekly originated carloads, and YoY % over the comparison window | Carloads / YoY % · Network / Segment / Railroad · 1Y / 2Y / 5Y (how far back) |
 | **What's driving it** | Waterfall over the comparison window. Each commodity's, railroad's or segment's change in points of the network's YoY %, stepping from 0 to the network total | Commodity / Railroad / Segment |
 | **Service** | Is service improving? Each railroad vs its own history only | Vs. History (one railroad) / YoY % (All) · Speed / Dwell / Cars Online |
-| **Market share** | Share between direct competitors (UP vs BNSF in the West, CSX vs NS in the East), or of the whole network | All Railroads / West / East · Segment · Commodity |
+| **Market share** | Each railroad's share of the selected railroads' originated carloads (all six by default; pick two to compare head to head) | Railroad filter · Segment · Commodity |
 | **Tables** | Quarter-to-date tracker with projection (formula in the column tooltip), commodities, terminals | Quarter picker · sort by clicking a column; search from the table toolbar |
 
 - **Export.** *Excel* (top bar) downloads every table plus the data behind each chart, with an About sheet recording the data week, load time and filters, so saved snapshots are self-describing. Each chart's camera icon saves a 3x PNG for decks; each table's toolbar downloads CSV.

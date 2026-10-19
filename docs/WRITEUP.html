@@ -11,7 +11,7 @@
   body { margin: 0; background: #fff; color: var(--ink);
          font: 9.2pt/1.36 "Helvetica Neue", Helvetica, Arial, sans-serif; }
   main { max-width: 7.3in; margin: 0 auto; padding: 16px; }
-  @media print { main { padding: 0; max-width: none; } html { zoom: 0.97; } }  /* fits 2 Letter pages */
+  @media print { main { padding: 0; max-width: none; } html { zoom: 0.95; } }  /* fits 2 Letter pages */
   h1 { font-size: 17pt; margin: 0 0 2px; color: var(--accent); }
   .sub { color: var(--muted); margin: 0 0 10px; }
   h2 { font-size: 11pt; color: var(--accent); margin: 9px 0 3px; padding-bottom: 2px;
@@ -130,7 +130,7 @@
   <tr><td>The datasets end their weeks on different days (Saturday and Friday).</td><td>They are joined on the Wednesday filing date, which both share.</td></tr>
   <tr><td>The service dataset repeats the carloads data (157,226 of 157,228 values match).</td><td>I load carloads from one source only and use the copy as a cross check. A disagreement is flagged.</td></tr>
   <tr><td>CP and KCS merged into CPKC in May 2025.</td><td>Volumes are summed into one continuous CPKC series. Speed and dwell start as a new series. Speed is an average, so CP's and KCS's cannot simply be added like carloads: blending them needs train-miles and train-hours the data doesn't include, and traffic once handed between the two now moves as one network.</td></tr>
-  <tr><td>Service metrics differ by railroad in what they count.</td><td>Units match (mph, hours), so no conversion helps; the gap is in definitions and networks. Each railroad calculates them its own way and files the method with the regulator: Norfolk Southern's dwell leaves out coal trains and containers, Union Pacific's leaves out stored and broken-down cars. Speed also reflects each network's terrain and traffic mix. Each railroad is compared only to its own history.</td></tr>
+  <tr><td>Service metrics can't be compared across railroads.</td><td>Units match (mph, hours), but each railroad defines them differently in its filing to the regulator (Norfolk Southern's dwell leaves out coal trains and containers). I tried two workarounds. A car-cycle measure built from counts (cars online ÷ carloads per day) caught the 2022 eastern crisis, but its levels still reflect network shape. The share of cars idle 48 hours differed sevenfold between CSX and BNSF. So each railroad is compared only to its own history.</td></tr>
   <tr><td>Railroads correct past weeks.</td><td>Every load re-pulls the full window, and each correction is logged with its old and new value.</td></tr>
   <tr><td>Blanks, zeros and half cars in the source.</td><td>Blanks load as missing, never zero (4,355 values). Real zeros stay zeros (2,733 rows). Carloads allow decimals because CPKC reports half cars.</td></tr>
   <tr><td>Holidays distort weekly comparisons.</td><td>The five lowest weeks all fall at Christmas or New Year. Each week is compared with the week exactly 52 weeks earlier, which keeps holidays aligned.</td></tr>
@@ -171,7 +171,7 @@
 <div>
 <h4>Business</h4>
 <ul>
-  <li><b>Prevents the mistakes raw data invites.</b> The public files make three errors easy: counting a car twice when it changes railroads, ranking railroads on service metrics each defines differently, and losing CP and KCS history at the CPKC merger. The database prevents all three, so every chart and export is safe.</li>
+  <li><b>Prevents the mistakes raw data invites.</b> The public files make three errors easy: counting a car twice when it changes railroads, ranking railroads on service metrics each defines differently, and losing CP and KCS history at the CPKC merger. The pipeline's rules prevent all three: only originated carloads count as volume, CP and KCS are stitched into CPKC, and service is compared only within each railroad.</li>
   <li><b>Answers the brief's three questions on one screen.</b> Volume, its drivers and service trends sit together, one day after railroads file. Quarterly volume is projected weeks before earnings.</li>
   <li><b>Changes to history are visible.</b> Railroads often correct past weeks. Each correction is logged and emailed, so the analyst knows when a number in their model has changed.</li>
 </ul>
@@ -184,16 +184,15 @@
 <h4>Engineering</h4>
 <ul>
   <li><b>No test for implausible values.</b> The checks catch structural problems such as unknown codes or a missing railroad. A value that is well formed but unlikely, such as volume falling 60% in a week from a filing error, would still publish.</li>
-  <li><b>No snapshots of past data.</b> Corrections are recorded only from the first run, so the system cannot show the data as it stood on a past date. Projections are tested on corrected figures, which flatters their accuracy.</li>
+  <li><b>No snapshots of past data.</b> Corrections are recorded only from the first run, so the system cannot show the data as it stood on a past date.</li>
   <li><b>No dashboard tests, and one user only.</b> A code change could break a chart unnoticed. The system runs on one machine with no login.</li>
 </ul>
 </div>
 <div>
 <h4>Business</h4>
 <ul>
-  <li><b>Volume is not revenue.</b> Revenue also depends on pricing and freight mix, and the system has no link to reported financials. The analyst still translates volume into earnings.</li>
-  <li><b>Limited coverage.</b> Six large railroads only, with U.S. operations alone for CN and CPKC. No pricing, short line railroads or other transport modes.</li>
-  <li><b>The model did not beat the run-rate.</b> Its average error was higher in both backtests (2.09% vs. 1.75%, 15 quarters; 2.48% vs. 2.35%, 30). It helped mainly in shocks such as 2020.</li>
+  <li><b>Volume is not revenue.</b> The system has no link to pricing or reported financials.</li>
+  <li><b>The model did not beat the run-rate.</b> Projecting each railroad's quarterly originated carloads, its average error was higher in both backtests (2.09% vs. 1.75%, 15 quarters; 2.48% vs. 2.35%, 30). It helped mainly in shocks such as 2020.</li>
 </ul>
 </div>
 </div>
@@ -205,13 +204,14 @@
 <ul>
   <li>Hold values outside each series' normal range before they publish.</li>
   <li>Keep a weekly snapshot, so projections are tested on what was known then.</li>
+  <li>Compare service across railroads, starting from the car-cycle measure.</li>
   <li>Test every dashboard panel, and host it with a login for a team.</li>
 </ul>
 </div>
 <div>
 <h4>Business</h4>
 <ul>
-  <li>Add reported quarterly volume and revenue per carload, so projections are scored against what investors see.</li>
+  <li>Bridge volume to revenue: projected carloads × each railroad's reported revenue per carload, by segment.</li>
   <li>Alert the analyst when service or volume moves outside its normal range.</li>
 </ul>
 </div>
