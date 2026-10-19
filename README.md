@@ -36,12 +36,12 @@ One screen, filtered by railroad and quarter from the top bar:
 
 | Panel | Question it answers | Toggles |
 |---|---|---|
-| **Map** | Where is the network congested, and where is grain or coal moving vs last year? | Terminal dwell (click a terminal to chart it) · Grain by state · Coal by basin |
+| **Map** | Where is the network congested, and where is grain or coal moving vs last year? | Terminal Dwell (click a terminal to chart it) · Grain Cars Loaded · Grain Car Orders · Grain Shuttle Turns · Coal Loadings. These are the only measures reported by place; the rest are system-wide per railroad |
 | **What's moving** | Weekly originated carloads, this year vs last | Carloads / YoY % · Network / Segment / Railroad · 1Y / 2Y / 5Y |
-| **What's driving it** | Each commodity's, railroad's or segment's share of the network's YoY change, quarter to date | Commodity / Railroad / Segment |
-| **Service** | Is service improving? Each railroad vs its own history only | Speed / Dwell / Cars online · vs history / YoY % all |
-| **Market share** | UP vs BNSF in the West, CSX vs NS in the East | Pair · Segment · Commodity |
-| **Tables** | Quarter-to-date tracker with projection, commodities (with macro read-through), terminals, revisions to history | Sort by clicking a column; search from the table toolbar |
+| **What's driving it** | Quarter to date vs the same weeks a year earlier: each commodity's, railroad's or segment's change divided by last year's network total, so the bars add up to the network's YoY % | Commodity / Railroad / Segment |
+| **Service** | Is service improving? Each railroad vs its own history only | Vs. History (one railroad) / YoY % (All) · Speed / Dwell / Cars Online |
+| **Market share** | Share between direct competitors (UP vs BNSF in the West, CSX vs NS in the East), or of the whole network | All Railroads / West / East · Segment · Commodity |
+| **Tables** | Quarter-to-date tracker with projection (formula in the column tooltip), commodities, terminals | Sort by clicking a column; search from the table toolbar |
 
 - **Export.** *Excel* (top bar) downloads every table plus the data behind each chart, with an About sheet recording the data week, load time and filters, so saved snapshots are self-describing. Each chart's camera icon saves a 3x PNG for decks; each table's toolbar downloads CSV.
 - **Light / dark.** ⋮ menu → Settings → Theme. Charts follow the app theme.
@@ -74,7 +74,7 @@ Each check answers: *would an analyst be misled by what we publish?* Code: [rail
 | `stale_data`: no new filing by Friday noon ET | dataset | Flagged and emailed once |
 | `unmapped_terminal`: a reported terminal has no map coordinates | dataset | Flagged; add it to `sql/terminals.sql` |
 
-A held row never overwrites a published one: the last good value stays until the source is fixed.
+Revisions are in `ops.revision` and each run's email. A held row never overwrites a published one: the last good value stays until the source is fixed.
 
 **Revisions.** When the source changes a value we already published, the new value is published and the change is logged in `ops.revision` (old value, new value). Each run's email lists them by railroad.
 

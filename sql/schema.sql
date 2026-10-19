@@ -14,9 +14,8 @@ CREATE TABLE IF NOT EXISTS core.railroad (
 );
 
 CREATE TABLE IF NOT EXISTS core.commodity (
-  commodity    text PRIMARY KEY,
-  segment      text NOT NULL CHECK (segment IN ('Intermodal', 'Coal', 'Merchandise')),  -- as railroads report
-  read_through text NOT NULL               -- what the volume says about the wider economy
+  commodity text PRIMARY KEY,
+  segment   text NOT NULL CHECK (segment IN ('Intermodal', 'Coal', 'Merchandise'))  -- as railroads report
 );
 
 CREATE TABLE IF NOT EXISTS core.terminal (   -- coordinates for the map; seeded in terminals.sql
@@ -110,30 +109,30 @@ INSERT INTO core.railroad VALUES
 ON CONFLICT (railroad) DO UPDATE SET name = EXCLUDED.name, merged_into = EXCLUDED.merged_into;
 
 INSERT INTO core.commodity VALUES
-  ('Containers',                      'Intermodal',  'Consumer goods and imports'),
-  ('Trailers',                        'Intermodal',  'Consumer goods; competes with truck'),
-  ('Coal',                            'Coal',        'Power generation and coal exports'),
-  ('Grain',                           'Merchandise', 'Agricultural exports'),
-  ('Grain Mill Products',             'Merchandise', 'Food processing and ethanol'),
-  ('Farm Products except Grain',      'Merchandise', 'Agriculture'),
-  ('Food and Kindred Products',       'Merchandise', 'Consumer staples'),
-  ('Fertilizer',                      'Merchandise', 'Farm inputs ahead of planting'),
-  ('Chemicals',                       'Merchandise', 'Industrial production'),
-  ('Petroleum Products',              'Merchandise', 'Energy'),
-  ('Lumber and Wood Products',        'Merchandise', 'Housing construction'),
-  ('Primary Forest Products',         'Merchandise', 'Housing and paper'),
-  ('Pulp, Paper and Allied Products', 'Merchandise', 'Packaging demand'),
-  ('Motor Vehicles and Equipment',    'Merchandise', 'Auto production'),
-  ('Metals',                          'Merchandise', 'Manufacturing and steel'),
-  ('Iron and Steel Scrap',            'Merchandise', 'Steel production'),
-  ('Metallic Ores',                   'Merchandise', 'Steel and mining'),
-  ('Coke',                            'Merchandise', 'Steel production'),
-  ('Crushed Stone, Sand and Gravel',  'Merchandise', 'Construction and frac sand'),
-  ('Non Metallic Minerals',           'Merchandise', 'Construction and chemicals'),
-  ('Stone, Clay and Glass Products',  'Merchandise', 'Construction'),
-  ('Waste and Scrap Materials',       'Merchandise', 'Industrial activity'),
-  ('All Other',                       'Merchandise', 'Mixed')
-ON CONFLICT (commodity) DO UPDATE SET segment = EXCLUDED.segment, read_through = EXCLUDED.read_through;
+  ('Containers',                      'Intermodal'),
+  ('Trailers',                        'Intermodal'),
+  ('Coal',                            'Coal'),
+  ('Grain',                           'Merchandise'),
+  ('Grain Mill Products',             'Merchandise'),
+  ('Farm Products except Grain',      'Merchandise'),
+  ('Food and Kindred Products',       'Merchandise'),
+  ('Fertilizer',                      'Merchandise'),
+  ('Chemicals',                       'Merchandise'),
+  ('Petroleum Products',              'Merchandise'),
+  ('Lumber and Wood Products',        'Merchandise'),
+  ('Primary Forest Products',         'Merchandise'),
+  ('Pulp, Paper and Allied Products', 'Merchandise'),
+  ('Motor Vehicles and Equipment',    'Merchandise'),
+  ('Metals',                          'Merchandise'),
+  ('Iron and Steel Scrap',            'Merchandise'),
+  ('Metallic Ores',                   'Merchandise'),
+  ('Coke',                            'Merchandise'),
+  ('Crushed Stone, Sand and Gravel',  'Merchandise'),
+  ('Non Metallic Minerals',           'Merchandise'),
+  ('Stone, Clay and Glass Products',  'Merchandise'),
+  ('Waste and Scrap Materials',       'Merchandise'),
+  ('All Other',                       'Merchandise')
+ON CONFLICT (commodity) DO UPDATE SET segment = EXCLUDED.segment;
 
 -- The service dataset's 'Weekly Carloads By 23 Commodity Categories' is not listed:
 -- it duplicates the carloads dataset and is used only for the reconciliation check.

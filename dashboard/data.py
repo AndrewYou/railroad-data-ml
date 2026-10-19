@@ -13,11 +13,12 @@ from rail import db
 YEAR = pd.Timedelta(days=364)
 RECENT_WEEKS = 4  # "latest" on the map = the last 4 weeks, which smooths one-off weeks
 SEGMENTS = ("Intermodal", "Coal", "Merchandise")
-PAIRS = {"West: UP vs BNSF": ("UP", "BNSF"), "East: CSX vs NS": ("CSX", "NS")}
+SHARE_GROUPS = {  # railroads that compete for the same freight; None = the whole network
+    "All Railroads": None, "West: UP vs. BNSF": ("UP", "BNSF"), "East: CSX vs. NS": ("CSX", "NS")}
 SERVICE_METRICS = {  # measure -> (label, unit, higher is better)
-    "train_speed": ("Train speed", "mph", True),
-    "terminal_dwell": ("Terminal dwell", "hours", False),
-    "cars_online": ("Cars online", "cars", False),
+    "train_speed": ("Train Speed", "MPH", True),
+    "terminal_dwell": ("Terminal Dwell", "Hours", False),
+    "cars_online": ("Cars Online", "Cars", False),
 }
 
 
@@ -55,7 +56,7 @@ def originated() -> pd.DataFrame:
 
 
 def commodities() -> pd.DataFrame:
-    return query("SELECT commodity, segment, read_through FROM core.commodity")
+    return query("SELECT commodity, segment FROM core.commodity")
 
 
 def active_railroads() -> list[str]:
@@ -74,6 +75,14 @@ def grain_by_state() -> pd.DataFrame:
     return query("SELECT week_ending, railroad, state, cars FROM mart.grain_by_state")
 
 
+def grain_orders_by_state() -> pd.DataFrame:
+    return query("SELECT week_ending, railroad, state, orders FROM mart.grain_orders_by_state")
+
+
+def shuttle_turns_by_region() -> pd.DataFrame:
+    return query("SELECT week_ending, railroad, region, turns FROM mart.shuttle_turns_by_region")
+
+
 def coal_by_basin() -> pd.DataFrame:
     return query("SELECT week_ending, railroad, basin, loadings FROM mart.coal_by_basin")
 
@@ -88,14 +97,6 @@ def status() -> dict:
                  WHERE run_id IN (SELECT max(run_id) FROM ops.job_run GROUP BY dataset)) AS open_issues,
                (SELECT status FROM ops.job_run ORDER BY run_id DESC LIMIT 1) AS last_status""").iloc[0]
     return row.to_dict()
-
-
-def revisions() -> pd.DataFrame:
-    return query("""
-        SELECT j.finished_at::date AS loaded_on, r.dataset, r.railroad, r.week_ending, r.series,
-               r.old_value, r.new_value, r.new_value - r.old_value AS change
-        FROM ops.revision r JOIN ops.job_run j USING (run_id)
-        ORDER BY r.revision_id DESC LIMIT 5000""")
 
 
 # Comparisons ---------------------------------------------------------------------------
@@ -141,8 +142,10 @@ def quarter_to_date(orig: pd.DataFrame, quarter: pd.Period, by: list[str]) -> pd
         "Last year's quarter": qtd_ly + rest_ly.reindex(qtd.index, fill_value=0),
     })
     out["Change vs LY"] = out["QTD carloads"] - out["QTD last year"]
-    out.attrs["weeks"] = int(((latest - start).days // 7) + 1)
-    out.attrs["through"] = str(latest.date())
+    first = orig.loc[orig["week_ending"] >= start, "week_ending"].min()
+    out.attrs = {"weeks": int((latest - first).days // 7 + 1),  # strings: attrs must stay serializable
+                 "first": f"{first:%b %d}", "through": f"{latest:%b %d, %Y}",
+                 "first_ly": f"{first - YEAR:%b %d}", "through_ly": f"{latest - YEAR:%b %d, %Y}"}
     return out
 
 
@@ -165,17 +168,17 @@ def weekly_volume(orig: pd.DataFrame, by: str | None) -> pd.DataFrame:
     return weekly
 
 
-def market_share(orig: pd.DataFrame, pair: tuple[str, str], segment: str | None, commodity: str | None):
-    """Share of the pair's originated carloads, 13-week rolling, for the first railroad in the pair."""
-    rows = orig[orig["railroad"].isin(pair)]
+def market_share(orig: pd.DataFrame, railroads: tuple[str, ...] | None, segment: str | None,
+                 commodity: str | None) -> pd.DataFrame:
+    """Each railroad's share of the group's originated carloads, 13-week rolling, one column per railroad."""
+    rows = orig if railroads is None else orig[orig["railroad"].isin(railroads)]
     if segment:
         rows = rows[rows["segment"] == segment]
     if commodity:
         rows = rows[rows["commodity"] == commodity]
     weekly = rows.pivot_table(index="week_ending", columns="railroad", values="carloads", aggfunc="sum")
     rolled = weekly.rolling(13).sum()
-    share = (rolled[pair[0]] / rolled.sum(axis=1) * 100).dropna()
-    return share.rename(f"{pair[0]} share %").reset_index()
+    return (rolled.div(rolled.sum(axis=1), axis=0) * 100).dropna(how="all").reset_index()
 
 
 def service_yoy(svc: pd.DataFrame, measure: str) -> pd.DataFrame:

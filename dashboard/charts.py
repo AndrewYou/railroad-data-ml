@@ -87,32 +87,37 @@ def volume(weekly: pd.DataFrame, metric: str, since: pd.Timestamp, height: int) 
             fig.add_scatter(x=g["week_ending"], y=g["carloads"], name=group, line=dict(color=color, width=2),
                             hovertemplate="%{y:,.0f}")
             if rows["group"].nunique() == 1:  # one series: show last year behind it
-                fig.add_scatter(x=g["week_ending"], y=g["carloads_ly"], name="Same week last year",
+                fig.add_scatter(x=g["week_ending"], y=g["carloads_ly"], name="Same Week Last Year",
                                 line=dict(color=P.baseline, width=2), hovertemplate="%{y:,.0f}")
     if metric == "YoY %":
         zero_line(fig)
-    return styled(fig, height, "% vs last year (4-wk)" if metric == "YoY %" else "carloads / week")
+    return styled(fig, height, "YoY %, 4-Week Total" if metric == "YoY %" else "Carloads / Week")
 
 
-def drivers(df: pd.DataFrame, by: str, height: int) -> go.Figure:
+def drivers(df: pd.DataFrame, height: int) -> go.Figure:
     colors = [P.better if v >= 0 else P.worse for v in df["Contribution (pp)"]]
     fig = go.Figure(go.Bar(
         x=df["Contribution (pp)"], y=df.index, orientation="h", marker=dict(color=colors, cornerradius=4),
         customdata=df[["Change vs LY", "YoY %"]],
-        hovertemplate="%{y}<br>%{x:+.2f} pp of network change<br>%{customdata[0]:+,.0f} carloads (%{customdata[1]:+.1f}%)<extra></extra>"))
+        hovertemplate="<b>%{y}</b><br>%{customdata[0]:+,.0f} carloads (%{customdata[1]:+.1f}% YoY)"
+                      "<br>%{x:+.2f} pp of the network's YoY change<extra></extra>"))
     fig.add_vline(x=0, line_width=1, line_color=P.baseline)
     fig = styled(fig, height, hover="closest")
-    fig.update_xaxes(title="percentage points of network YoY change", title_font_size=11, showgrid=True, gridcolor=P.grid)
+    fig.update_xaxes(title="Contribution to Network YoY Change (Percentage Points)", title_font_size=11,
+                     showgrid=True, gridcolor=P.grid)
     fig.update_yaxes(gridcolor=P.surface, tickfont=dict(size=11), tickmode="array", tickvals=list(df.index))
     return fig
 
 
-def share(df: pd.DataFrame, column: str, height: int) -> go.Figure:
-    railroad = column.split()[0]
-    fig = go.Figure(go.Scatter(x=df["week_ending"], y=df[column], name=column,
-                               line=dict(color=color_for(railroad), width=2), hovertemplate="%{y:.1f}%"))
-    fig.add_hline(y=50, line_width=1, line_color=P.baseline)
-    return styled(fig, height, f"{railroad} share of pair, % (13-wk)")
+def share(df: pd.DataFrame, y_title: str, height: int, reference: float | None = None) -> go.Figure:
+    """One line per railroad: its share of the group's originated carloads."""
+    fig = go.Figure()
+    for railroad in [r for r in RAILROADS if r in df]:
+        fig.add_scatter(x=df["week_ending"], y=df[railroad], name=railroad,
+                        line=dict(color=color_for(railroad), width=2), hovertemplate="%{y:.1f}%")
+    if reference:
+        fig.add_hline(y=reference, line_width=1, line_color=P.baseline)
+    return styled(fig, height, y_title)
 
 
 # Service --------------------------------------------------------------------------------
@@ -123,24 +128,24 @@ def service_yoy(df: pd.DataFrame, label: str, higher_is_better: bool, height: in
         fig.add_scatter(x=g["week_ending"], y=g["yoy_4wk"], name=railroad,
                         line=dict(color=color_for(railroad), width=2), hovertemplate="%{y:+.1f}%")
     zero_line(fig)
-    direction = "up is better" if higher_is_better else "down is better"
-    return styled(fig, height, f"{label}, % vs own last year ({direction})")
+    direction = "Up Is Better" if higher_is_better else "Down Is Better"
+    return styled(fig, height, f"{label} YoY % ({direction})")
 
 
 def service_history(df: pd.DataFrame, unit: str, height: int) -> go.Figure:
     """This year vs last year by week of year, over the range of all earlier years."""
     fig = go.Figure()
     fig.add_scatter(x=df["week"], y=df["range_high"], line=dict(width=0), showlegend=False, hoverinfo="skip")
-    fig.add_scatter(x=df["week"], y=df["range_low"], name="Range, earlier years", fill="tonexty",
+    fig.add_scatter(x=df["week"], y=df["range_low"], name="Range of Earlier Years", fill="tonexty",
                     fillcolor=P.band, line=dict(width=0), hoverinfo="skip")
     if "Last year" in df:
-        fig.add_scatter(x=df["week"], y=df["Last year"], name="Last year", line=dict(color=P.muted, width=2),
+        fig.add_scatter(x=df["week"], y=df["Last year"], name="Last Year", line=dict(color=P.muted, width=2),
                         hovertemplate="%{y:,.1f}")
     if "This year" in df:
-        fig.add_scatter(x=df["week"], y=df["This year"], name="This year", line=dict(color=P.better, width=2),
+        fig.add_scatter(x=df["week"], y=df["This year"], name="This Year", line=dict(color=P.better, width=2),
                         hovertemplate="%{y:,.1f}")
     fig = styled(fig, height, unit)
-    fig.update_xaxes(title="week of year", title_font_size=11)
+    fig.update_xaxes(title="Week of Year", title_font_size=11)
     return fig
 
 
@@ -154,57 +159,64 @@ def _usa(fig: go.Figure, height: int) -> go.Figure:
     return fig
 
 
-def _colorbar(title: str) -> dict:
-    return dict(title=dict(text=title, side="right", font=dict(size=11)), thickness=10, len=0.6, ticksuffix="%")
+def _colorbar(variable: str) -> dict:
+    return dict(title=dict(text=f"{variable} YoY from Last Year", side="right", font=dict(size=11)),
+                thickness=10, len=0.75, ticksuffix="%")
 
 
-def terminal_map(df: pd.DataFrame, height: int) -> go.Figure:
+def terminal_map(df: pd.DataFrame, variable: str, height: int) -> go.Figure:
+    """One point per terminal, colored by dwell vs the same weeks last year (red = slower)."""
     no_history = df[df["yoy"].isna()]
     df = df[df["yoy"].notna()]
     fig = go.Figure(go.Scattergeo(
         lat=df["lat"], lon=df["lon"], mode="markers", showlegend=False,
         marker=dict(size=11, color=df["yoy"].clip(-30, 30), colorscale=diverging(False), cmin=-30, cmax=30,
-                    line=dict(width=1, color=P.ink_2), colorbar=_colorbar("dwell vs LY")),
+                    line=dict(width=1, color=P.ink_2), colorbar=_colorbar(variable)),
         customdata=df[["railroad", "terminal", "dwell_hours", "dwell_hours_ly", "yoy"]],
-        hovertemplate="<b>%{customdata[1]}</b> (%{customdata[0]})<br>dwell %{customdata[2]:.1f} h"
-                      "<br>last year %{customdata[3]:.1f} h (%{customdata[4]:+.1f}%)<extra></extra>"))
+        hovertemplate="<b>%{customdata[1]}</b> (%{customdata[0]})<br>Dwell %{customdata[2]:.1f} h"
+                      "<br>Last year %{customdata[3]:.1f} h (%{customdata[4]:+.1f}%)<extra></extra>"))
     fig.add_scattergeo(  # hollow: no same-weeks-last-year value to compare against
         lat=no_history["lat"], lon=no_history["lon"], mode="markers", showlegend=False,
         marker=dict(size=11, color="rgba(0,0,0,0)", line=dict(width=1.5, color=P.muted)),
         customdata=no_history[["railroad", "terminal", "dwell_hours"]],
-        hovertemplate="<b>%{customdata[1]}</b> (%{customdata[0]})<br>dwell %{customdata[2]:.1f} h"
-                      "<br>no value for the same weeks last year<extra></extra>")
+        hovertemplate="<b>%{customdata[1]}</b> (%{customdata[0]})<br>Dwell %{customdata[2]:.1f} h"
+                      "<br>No value for the same weeks last year<extra></extra>")
     return _usa(fig, height)
 
 
-def grain_map(df: pd.DataFrame, height: int) -> go.Figure:
+def state_map(df: pd.DataFrame, value: str, variable: str, unit: str, height: int) -> go.Figure:
+    """States shaded by change vs the same weeks last year (blue = up)."""
     fig = go.Figure(go.Choropleth(
         locations=df["state"], locationmode="USA-states", z=df["yoy"].clip(-50, 50),
         colorscale=diverging(True), zmin=-50, zmax=50, marker_line_color=P.surface, marker_line_width=1,
-        colorbar=_colorbar("grain cars vs LY"), customdata=df[["state", "cars", "cars_ly", "yoy"]],
-        hovertemplate="<b>%{customdata[0]}</b><br>%{customdata[1]:,.0f} cars loaded"
-                      "<br>last year %{customdata[2]:,.0f} (%{customdata[3]:+.1f}%)<extra></extra>"))
+        colorbar=_colorbar(variable), customdata=df[["state", value, f"{value}_ly", "yoy"]],
+        hovertemplate=f"<b>%{{customdata[0]}}</b><br>%{{customdata[1]:,.0f}} {unit}"
+                      "<br>Last year %{customdata[2]:,.0f} (%{customdata[3]:+.1f}%)<extra></extra>"))
     return _usa(fig, height)
 
 
-BASINS = {  # approximate centre of each coal production region
+COAL_BASINS = {  # approximate centre of each coal production region
     "Powder River Basin": (44.0, -105.6), "Uinta Basin": (39.6, -110.8), "Illinois Basin": (38.3, -88.0),
     "Northern Appalachia": (39.8, -80.2), "Central Appalachia": (37.5, -82.0), "Southern Appalachia": (33.6, -87.2)}
+SHUTTLE_REGIONS = {  # approximate destination of grain shuttle trains; Mexico drawn at the border
+    "PNW": (46.2, -122.9), "CA": (36.8, -119.8), "CA/AZ": (33.4, -114.6), "West TX": (31.8, -102.4),
+    "AR/TX": (33.4, -94.0), "Gulf": (29.7, -94.9), "River": (38.6, -90.2), "Mexico": (27.6, -99.5)}
 
 
-def coal_map(df: pd.DataFrame, height: int) -> go.Figure:
-    """One marker per railroad and basin, offset so they don't overlap. Units differ by railroad."""
-    df = df[df["basin"].isin(BASINS) & (df["loadings_ly"] > 0)].copy()
+def railroad_markers(df: pd.DataFrame, place: str, centers: dict, value: str, variable: str,
+                     unit_for, height: int) -> go.Figure:
+    """One marker per railroad and place, offset so they don't overlap. Never summed across railroads."""
+    df = df[df[place].isin(centers) & (df[f"{value}_ly"] > 0)].copy()
     offsets = {r: i for i, r in enumerate(RAILROADS)}
-    df["lat"] = df["basin"].map(lambda b: BASINS[b][0])
-    df["lon"] = df["basin"].map(lambda b: BASINS[b][1]) + df["railroad"].map(offsets).fillna(0) * 1.2 - 3
-    df["unit"] = df["railroad"].map(lambda r: "carloads" if r == "CSX" else "unit trains")
+    df["lat"] = df[place].map(lambda c: centers[c][0])
+    df["lon"] = df[place].map(lambda c: centers[c][1]) + (df["railroad"].map(offsets).fillna(0) - 2.5) * 2.2
+    df["unit"] = df["railroad"].map(unit_for)
     fig = go.Figure(go.Scattergeo(
         lat=df["lat"], lon=df["lon"], mode="markers+text", text=df["railroad"], textposition="top center",
-        textfont=dict(size=10, color=P.ink_2),
+        textfont=dict(size=10, color=P.ink_2), showlegend=False,
         marker=dict(size=13, color=df["yoy"].clip(-50, 50), colorscale=diverging(True), cmin=-50, cmax=50,
-                    line=dict(width=1, color=P.ink_2), colorbar=_colorbar("coal loadings vs LY")),
-        customdata=df[["basin", "railroad", "loadings", "loadings_ly", "yoy", "unit"]],
+                    line=dict(width=1, color=P.ink_2), colorbar=_colorbar(variable)),
+        customdata=df[[place, "railroad", value, f"{value}_ly", "yoy", "unit"]],
         hovertemplate="<b>%{customdata[0]}</b>, %{customdata[1]}<br>%{customdata[2]:,.1f} %{customdata[5]}"
-                      "<br>last year %{customdata[3]:,.1f} (%{customdata[4]:+.1f}%)<extra></extra>"))
+                      "<br>Last year %{customdata[3]:,.1f} (%{customdata[4]:+.1f}%)<extra></extra>"))
     return _usa(fig, height)

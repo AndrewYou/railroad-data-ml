@@ -43,6 +43,19 @@ SELECT week_ending, railroad, subvariable AS state, value AS cars
 FROM core.service_metric
 WHERE measure = 'grain_cars_loaded' AND variable = 'All' AND length(subvariable) = 2;  -- 2-letter states only
 
+-- Grain car orders placed by state and railroad (demand for grain cars).
+CREATE VIEW mart.grain_orders_by_state AS
+SELECT week_ending, railroad, subvariable AS state, value AS orders
+FROM core.service_metric
+WHERE measure = 'grain_car_orders' AND variable = 'Placed' AND length(subvariable) = 2;
+
+-- Grain shuttle turns per month by destination region and railroad. An average per
+-- railroad (asset utilization), so never sum across railroads.
+CREATE VIEW mart.shuttle_turns_by_region AS
+SELECT week_ending, railroad, subvariable AS region, value AS turns
+FROM core.service_metric
+WHERE measure = 'grain_shuttle_turns' AND variable = 'Average Turns' AND subvariable NOT IN ('System', 'Other', '');
+
 -- Coal loadings by basin and railroad. Units differ by railroad (CSX reports carloads,
 -- others unit trains), so never sum across railroads.
 CREATE VIEW mart.coal_by_basin AS
