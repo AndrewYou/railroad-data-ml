@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "rail",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "rail",
+      "Username": "rail",
+      "SSLMode": "prefer"
+    }
+  }
+}

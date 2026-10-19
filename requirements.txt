@@ -1,0 +1,4 @@
+psycopg[binary]==3.3.6
+requests==2.34.2
+tzdata==2026.5
+pytest==9.1.1
