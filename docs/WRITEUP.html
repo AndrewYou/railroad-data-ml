@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rail Freight Monitor Write-up</title>
+<style>
+  @page { size: Letter; margin: 0.45in 0.55in; }
+  :root { --ink: #1a1f2b; --muted: #5b6475; --rule: #d5dae3; --accent: #1f4e79; --fill: #f3f6fa; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #fff; color: var(--ink);
+         font: 9.2pt/1.36 "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  main { max-width: 7.3in; margin: 0 auto; padding: 16px; }
+  @media print { main { padding: 0; max-width: none; } html { zoom: 0.97; } }  /* fits 2 Letter pages */
+  h1 { font-size: 17pt; margin: 0 0 2px; color: var(--accent); }
+  .sub { color: var(--muted); margin: 0 0 10px; }
+  h2 { font-size: 11pt; color: var(--accent); margin: 9px 0 3px; padding-bottom: 2px;
+       border-bottom: 1px solid var(--rule); break-after: avoid; }
+  h3 { font-size: 9.8pt; margin: 5px 0 1px; break-after: avoid; }
+  p { margin: 0 0 5px; }
+  ul { margin: 0 0 5px; padding-left: 16px; }
+  li { margin: 0 0 2px; }
+  b { font-weight: 600; }
+  code { font: 8.6pt Menlo, Consolas, monospace; }
+  table { width: 100%; border-collapse: collapse; margin: 3px 0 5px; font-size: 8.6pt; }
+  tr { break-inside: avoid; }
+  th, td { text-align: left; padding: 2px 6px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { background: var(--fill); font-weight: 600; }
+  td.n { text-align: right; white-space: nowrap; }
+  figure { margin: 4px auto 6px; max-width: 5.0in; break-inside: avoid; }
+  figcaption { color: var(--muted); font-size: 8.4pt; margin-top: 2px; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; fill: var(--ink); }
+  h4 { font-size: 8.6pt; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 2px 0 2px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+  @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+
+<h1>U.S. Rail Freight Monitor</h1>
+<p class="sub">Write-up for Jain Global Case Study · Andrew You · October 2026</p>
+
+<h2>1. Approach</h2>
+<p>The goal was a system an equity researcher can trust every Thursday without checking the plumbing. I built it in four layers: ingestion, data checks, storage and analysis. Everything starts with one command, <code>docker compose up</code>, and needs no accounts or keys.</p>
+
+<figure>
+<svg viewBox="0 0 960 300" role="img" aria-label="System design: USDA API feeds a Python worker that checks and loads Postgres, which serves the dashboard, pgAdmin and email alerts.">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f4e79"/>
+    </marker>
+  </defs>
+  <g stroke="#1f4e79" stroke-width="1.4" fill="none" marker-end="url(#a)">
+    <path d="M182,128 L232,112"/>
+    <path d="M470,150 L508,150"/>
+    <path d="M690,145 L728,66"/>
+    <path d="M690,145 L728,122"/>
+    <path d="M690,145 L728,177"/>
+    <path d="M345,270 L345,288 L840,288 L840,262"/>
+  </g>
+  <!-- source -->
+  <rect x="10" y="78" width="172" height="120" rx="8" fill="#f3f6fa" stroke="#9fb0c6"/>
+  <text x="96" y="104" text-anchor="middle" font-size="14" font-weight="600">USDA AgTransport</text>
+  <text x="96" y="122" text-anchor="middle" font-size="12">Socrata API (JSON)</text>
+  <text x="96" y="148" text-anchor="middle" font-size="11.5" fill="#5b6475">Carloadings tb7q-kn5i</text>
+  <text x="96" y="165" text-anchor="middle" font-size="11.5" fill="#5b6475">Service axkm-yjzy</text>
+  <text x="96" y="186" text-anchor="middle" font-size="11" fill="#5b6475">STB EP 724 filings</text>
+  <!-- worker -->
+  <rect x="220" y="14" width="250" height="256" rx="8" fill="#fff" stroke="#9fb0c6"/>
+  <text x="345" y="36" text-anchor="middle" font-size="14" font-weight="600">Worker (Python)</text>
+  <g font-size="11.5">
+    <rect x="234" y="48" width="222" height="30" rx="5" fill="#f3f6fa" stroke="#c9d3e0"/>
+    <text x="345" y="67" text-anchor="middle">1  Hourly: is rowsUpdatedAt newer?</text>
+    <rect x="234" y="84" width="222" height="30" rx="5" fill="#f3f6fa" stroke="#c9d3e0"/>
+    <text x="345" y="103" text-anchor="middle">2  Fetch full window, 50K rows/page</text>
+    <rect x="234" y="120" width="222" height="30" rx="5" fill="#f3f6fa" stroke="#c9d3e0"/>
+    <text x="345" y="139" text-anchor="middle">3  Stage, row checks, hold bad rows</text>
+    <rect x="234" y="156" width="222" height="30" rx="5" fill="#f3f6fa" stroke="#c9d3e0"/>
+    <text x="345" y="175" text-anchor="middle">4  Upsert in one transaction</text>
+    <rect x="234" y="192" width="222" height="30" rx="5" fill="#f3f6fa" stroke="#c9d3e0"/>
+    <text x="345" y="211" text-anchor="middle">5  Dataset checks, log revisions</text>
+    <rect x="234" y="228" width="222" height="30" rx="5" fill="#f3f6fa" stroke="#c9d3e0"/>
+    <text x="345" y="247" text-anchor="middle">6  Quarterly projection, email summary</text>
+  </g>
+  <!-- postgres -->
+  <rect x="510" y="40" width="180" height="210" rx="8" fill="#fff" stroke="#9fb0c6"/>
+  <text x="600" y="62" text-anchor="middle" font-size="14" font-weight="600">PostgreSQL 16</text>
+  <g font-size="11.5">
+    <rect x="524" y="76" width="152" height="34" rx="5" fill="#f3f6fa" stroke="#c9d3e0"/>
+    <text x="600" y="97" text-anchor="middle"><tspan font-weight="600">core</tspan>  typed, keyed data</text>
+    <rect x="524" y="116" width="152" height="34" rx="5" fill="#f3f6fa" stroke="#c9d3e0"/>
+    <text x="600" y="137" text-anchor="middle"><tspan font-weight="600">ops</tspan>  runs, issues, revisions</text>
+    <rect x="524" y="156" width="152" height="34" rx="5" fill="#f3f6fa" stroke="#c9d3e0"/>
+    <text x="600" y="177" text-anchor="middle"><tspan font-weight="600">mart</tspan>  analysis views</text>
+    <rect x="524" y="196" width="152" height="34" rx="5" fill="#f3f6fa" stroke="#c9d3e0"/>
+    <text x="600" y="217" text-anchor="middle"><tspan font-weight="600">ml</tspan>  projection results</text>
+  </g>
+  <!-- consumers -->
+  <g font-size="12">
+    <rect x="730" y="40" width="220" height="48" rx="8" fill="#f3f6fa" stroke="#9fb0c6"/>
+    <text x="840" y="60" text-anchor="middle" font-weight="600">Dashboard: Equity Research</text>
+    <text x="840" y="77" text-anchor="middle" font-size="11" fill="#5b6475">Streamlit + Plotly, one screen</text>
+    <rect x="730" y="98" width="220" height="48" rx="8" fill="#f3f6fa" stroke="#9fb0c6"/>
+    <text x="840" y="118" text-anchor="middle" font-weight="600">Dashboard: Carload Projection</text>
+    <text x="840" y="135" text-anchor="middle" font-size="11" fill="#5b6475">baseline vs. model backtest</text>
+    <rect x="730" y="156" width="220" height="44" rx="8" fill="#f3f6fa" stroke="#9fb0c6"/>
+    <text x="840" y="176" text-anchor="middle" font-weight="600">pgAdmin</text>
+    <text x="840" y="192" text-anchor="middle" font-size="11" fill="#5b6475">ad hoc SQL on the same views</text>
+    <rect x="730" y="214" width="220" height="48" rx="8" fill="#f3f6fa" stroke="#9fb0c6"/>
+    <text x="840" y="234" text-anchor="middle" font-weight="600">Email (Mailpit)</text>
+    <text x="840" y="251" text-anchor="middle" font-size="11" fill="#5b6475">issues and restatements per run</text>
+  </g>
+</svg>
+<figcaption>System design. All five services (Postgres, worker, dashboard, pgAdmin, Mailpit) run locally from one Docker Compose file.</figcaption>
+</figure>
+
+<ul>
+  <li><b>Ingestion.</b> The worker pulls both datasets from the public USDA API. The first load backfills history from 2017. Every refresh re-fetches January 1 five years ago to today and inserts or updates rows without deleting any, so corrections to recent weeks are picked up and older weeks are kept.</li>
+  <li><b>Scheduling.</b> Every hour the worker asks USDA when each dataset last changed and loads only if that is newer than the last successful load.</li>
+  <li><b>Data checks.</b> Seven checks run before data is published. Rows that fail are set aside for review, and problems with a whole dataset are emailed.</li>
+  <li><b>Storage.</b> Analysis rules live in database views, so the dashboard and any analyst writing SQL see the same numbers.</li>
+  <li><b>Dashboard.</b> One screen answers the brief's three questions: what is moving, what is driving the change, and whether service is improving.</li>
+  <li><b>Machine learning.</b> A separate page projects each railroad's quarterly carloads and tests whether a gradient boosting model, trained only on earlier quarters, beats a 13-week run-rate. Trained on history from 2017, the run-rate still won (2.35% vs. 2.48% mean error over 30 quarters), so the page uses it.</li>
+</ul>
+
+<h2>2. Challenges</h2>
+<table>
+  <tr><th style="width:30%">Challenge</th><th>How I addressed it</th></tr>
+  <tr><td>The datasets end their weeks on different days (Saturday and Friday).</td><td>They are joined on the Wednesday filing date, which both share.</td></tr>
+  <tr><td>The service dataset repeats the carloads data (157,226 of 157,228 values match).</td><td>I load carloads from one source only and use the copy as a cross check. A disagreement is flagged.</td></tr>
+  <tr><td>CP and KCS merged into CPKC in May 2025.</td><td>Volumes are summed into one continuous CPKC series. Speed and dwell start as a new series, because CPKC's 20.0 mph is not comparable to CP's 21.7 or KCS's 25.9.</td></tr>
+  <tr><td>Each railroad measures service its own way.</td><td>Speed and dwell are never compared or averaged across railroads. Each railroad is compared only to its own history.</td></tr>
+  <tr><td>Railroads correct past weeks.</td><td>Every load re-pulls the full window, and each correction is logged with its old and new value.</td></tr>
+  <tr><td>Blanks, zeros and half cars in the source.</td><td>Blanks load as missing, never zero (4,355 values). Real zeros stay zeros (2,733 rows). Carloads allow decimals because CPKC reports half cars.</td></tr>
+  <tr><td>A simple run-rate beat the first model.</td><td>The model predicts a correction to the run-rate. The backtest result was accepted, not tuned against.</td></tr>
+  <tr><td>Holidays distort weekly comparisons.</td><td>The five lowest weeks all fall at Christmas or New Year. Each week is compared with the week exactly 52 weeks earlier, which keeps holidays aligned.</td></tr>
+</table>
+
+<h2>3. Assumptions</h2>
+<ul>
+  <li>USDA's republication matches the railroads' filings to the STB, and the latest published value is correct.</li>
+  <li>History starts with the first carloads filing (March 2017, 499 weeks). Restatements older than five years are rare, so those weeks are loaded once and kept.</li>
+  <li>Originated carloads measure network volume, because received carloads count interchanged cars twice.</li>
+  <li>The user is one analyst on one machine, and a local inbox stands in for a real mail server.</li>
+</ul>
+
+<h2>4. How I Expect an Analyst to Use the System</h2>
+<p>Railroads file on Wednesday, USDA republishes Thursday morning, and the dashboard updates within the hour. The analyst opens one screen and sees whether volume is up, which commodities and railroads drove the change, and whether each railroad's service is improving against its own record. The quarter-to-date tracker and Carload Projection page project quarterly volume ahead of earnings. Exports feed models and decks, and the weekly email flags any corrected weeks.</p>
+
+<h2>5. Self-Assessment</h2>
+<table>
+  <tr><th>Metric</th><th style="text-align:right">Value</th><th>Metric</th><th style="text-align:right">Value</th></tr>
+  <tr><td>Setup from a fresh clone</td><td class="n">1 command</td><td>History loaded</td><td class="n">499 weeks</td></tr>
+  <tr><td>Rows fetched per refresh (5 years)</td><td class="n">986,349</td><td>Rows published (carloads, service)</td><td class="n">157,228 / 1,334,178</td></tr>
+  <tr><td>First load time (carloads, service)</td><td class="n">16 s / 198 s</td><td>Database size</td><td class="n">265 MB</td></tr>
+  <tr><td>Lag after USDA publishes</td><td class="n">&le; 1 hour</td><td>Data checks</td><td class="n">7</td></tr>
+  <tr><td>Automated tests on real Postgres, in CI</td><td class="n">24</td><td>Rows held in the latest load</td><td class="n">0</td></tr>
+  <tr><td>Terminals in latest week on the map</td><td class="n">64 of 64</td><td>Code (Python and SQL, excluding tests)</td><td class="n">~1,900 lines</td></tr>
+</table>
+
+<h3>Strengths</h3>
+<div class="cols">
+<div>
+<h4>Engineering</h4>
+<ul>
+  <li><b>Bad data cannot overwrite good data.</b> Every row is validated before the dashboard can see it. A failing row, such as an unknown railroad code, is set aside and the last good value stays. A load that fails partway is undone in full.</li>
+  <li><b>Runs from scratch with one command.</b> A new machine with Docker loads 9.5 years of data in about 4 minutes with no accounts or keys, then refreshes itself within an hour of each USDA update.</li>
+  <li><b>Small enough to review and extend.</b> About 1,900 lines of code, with 24 automated tests on every change. A new metric is one row in a reference table, not new code.</li>
+</ul>
+</div>
+<div>
+<h4>Business</h4>
+<ul>
+  <li><b>Prevents the mistakes raw data invites.</b> The public files make three errors easy: counting a car twice when it changes railroads, ranking railroads on service metrics each defines differently, and losing CP and KCS history at the CPKC merger. The database prevents all three, so every chart and export is safe.</li>
+  <li><b>Answers the brief's three questions on one screen.</b> Volume, its drivers and service trends sit together, one day after railroads file. Quarterly volume is projected weeks before earnings.</li>
+  <li><b>Changes to history are visible.</b> Railroads often correct past weeks. Each correction is logged and emailed, so the analyst knows when a number in their model has changed.</li>
+</ul>
+</div>
+</div>
+
+<h3>Weaknesses</h3>
+<div class="cols">
+<div>
+<h4>Engineering</h4>
+<ul>
+  <li><b>No test for implausible values.</b> The checks catch structural problems such as unknown codes or a missing railroad. A value that is well formed but unlikely, such as volume falling 60% in a week from a filing error, would still publish.</li>
+  <li><b>No snapshots of past data.</b> Corrections are recorded only from the first run, so the system cannot show the data as it stood on a past date. Projections are tested on corrected figures, which flatters their accuracy.</li>
+  <li><b>No dashboard tests, and one user only.</b> A code change could break a chart unnoticed. The system runs on one machine with no login.</li>
+</ul>
+</div>
+<div>
+<h4>Business</h4>
+<ul>
+  <li><b>Volume is not revenue.</b> Revenue also depends on pricing and freight mix, and the system has no link to reported financials. The analyst still translates volume into earnings.</li>
+  <li><b>Limited coverage.</b> Six large railroads only, with U.S. operations alone for CN and CPKC. No pricing, short line railroads or other transport modes.</li>
+  <li><b>The model did not beat the run-rate.</b> Its average error was higher in both backtests (2.09% vs. 1.75%, 15 quarters; 2.48% vs. 2.35%, 30). It helped mainly in shocks such as 2020.</li>
+</ul>
+</div>
+</div>
+
+<h3>What I would improve with more time</h3>
+<div class="cols">
+<div>
+<h4>Engineering</h4>
+<ul>
+  <li>Hold values outside each series' normal range before they publish.</li>
+  <li>Keep a weekly snapshot, so projections are tested on what was known then.</li>
+  <li>Test every dashboard panel, and host it with a login for a team.</li>
+</ul>
+</div>
+<div>
+<h4>Business</h4>
+<ul>
+  <li>Add reported quarterly volume and revenue per carload, so projections are scored against what investors see.</li>
+  <li>Alert the analyst when service or volume moves outside its normal range.</li>
+</ul>
+</div>
+</div>
+
+</main>
+</body>
+</html>
