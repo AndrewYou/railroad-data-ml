@@ -58,6 +58,20 @@ A held row never overwrites a published one: the last good value stays until the
 
 **Revisions.** When the source changes a value we already published, the new value is published and the change is logged in `ops.revision` (old value, new value). Each run's email lists them by railroad.
 
+## What breaks a load, and what happens
+
+| What goes wrong | Example | What happens | Published data | How to fix |
+|---|---|---|---|---|
+| API down or times out | USDA outage | Each request retried 5 times with backoff. Mid-load: the run fails (`ops.job_run.status = 'failed'`) and an email goes out. During the hourly check: logged, retried next hour, and `stale_data` emails if it lasts past Friday noon | Unchanged | Nothing; the watcher retries next hour |
+| Value can't be parsed | `"n/a"` in a number field | The dataset's transaction rolls back; run fails with the error; email sent | Unchanged | Fix the parse rule in `rail/datasets.py` |
+| New railroad, commodity or measure | Merged railroad files as `UPNS`; a measure is renamed | Those rows held (`invalid_row`); everything else publishes; listed in every run's email until mapped | Last good values kept; new series missing | Add the code to `sql/schema.sql`, restart the worker; held rows publish on the next load |
+| Duplicate rows in the source | Same railroad, commodity and week twice | Both held (`duplicate_key`) | Last good value kept | Usually fixed upstream; released automatically next load |
+| Railroad missing from the latest week | NS didn't file | Flagged (`incomplete_week`) | That railroad's week is absent, not zero | Wait for the filing, or ask USDA |
+| The two datasets disagree | Carloads total ≠ copy in service data | Flagged (`carloads_mismatch`) | Carloads dataset published as-is | Investigate which source is wrong |
+| Row vanishes upstream | USDA drops a week | Flagged (`removed_upstream`) | Our copy kept | Investigate; delete by hand if it was wrong |
+| Filing is late | Nothing new by Friday noon ET | Flagged once (`stale_data`), email sent | Last week's data | Usually USDA delay, e.g. holidays |
+| Database down | Container stopped | Run fails before publishing; watcher logs and retries hourly | Unchanged | Restart Postgres |
+
 ## Monitoring
 
 Everything is in Postgres, so you can query it in pgAdmin:
