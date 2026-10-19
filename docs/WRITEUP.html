@@ -117,12 +117,11 @@
 </figure>
 
 <ul>
-  <li><b>Ingestion.</b> The worker pulls both datasets from the public USDA API. The first load backfills history from 2017. Every refresh re-fetches January 1 five years ago to today and inserts or updates rows without deleting any, so corrections to recent weeks are picked up and older weeks are kept.</li>
-  <li><b>Scheduling.</b> Every hour the worker asks USDA when each dataset last changed and loads only if that is newer than the last successful load.</li>
-  <li><b>Data checks.</b> Seven checks run before data is published. Rows that fail are set aside for review, and problems with a whole dataset are emailed.</li>
-  <li><b>Storage.</b> Analysis rules live in database views, so the dashboard and any analyst writing SQL see the same numbers.</li>
+  <li><b>Ingestion.</b> The worker pulls both datasets from the public USDA API. The first load backfills all history, from the first filing (March 25, 2017). Every refresh re-fetches January 1, 2021 onward (five full years; the start moves up each January) and inserts or updates rows without deleting any, so corrections to recent weeks are picked up and older weeks are kept.</li>
+  <li><b>Scheduling.</b> Every hour the worker reads each dataset's public metadata, which includes <code>rowsUpdatedAt</code>, the time USDA last changed its rows. It loads only if that is newer than the timestamp saved with the last successful load, and loads anyway if nothing has succeeded in 7 days.</li>
+  <li><b>Data checks.</b> Seven checks guard each load. A failing row, such as an unknown railroad code, is not published: it is saved with its reason and original data in an issues table, listed in the run's email, and the last good value stays. Once fixed, it publishes on the next load. Problems with a whole dataset, such as a missing railroad, are flagged and emailed.</li>
   <li><b>Dashboard.</b> One screen answers the brief's three questions: what is moving, what is driving the change, and whether service is improving.</li>
-  <li><b>Machine learning.</b> A separate page projects each railroad's quarterly carloads and tests whether a gradient boosting model, trained only on earlier quarters, beats a 13-week run-rate. Trained on history from 2017, the run-rate still won (2.35% vs. 2.48% mean error over 30 quarters), so the page uses it.</li>
+  <li><b>Machine learning.</b> A separate page projects each railroad's quarterly carloads and tests whether a gradient boosting model, trained only on earlier quarters, beats a 13-week run-rate: carloads reported so far, plus the rest of the quarter at last year's level grown by the latest 13 weeks' year-over-year change. Trained on history from 2017, the run-rate still won (2.35% vs. 2.48% mean error over 30 quarters), so the page uses it.</li>
 </ul>
 
 <h2>2. Challenges</h2>
@@ -130,11 +129,10 @@
   <tr><th style="width:30%">Challenge</th><th>How I addressed it</th></tr>
   <tr><td>The datasets end their weeks on different days (Saturday and Friday).</td><td>They are joined on the Wednesday filing date, which both share.</td></tr>
   <tr><td>The service dataset repeats the carloads data (157,226 of 157,228 values match).</td><td>I load carloads from one source only and use the copy as a cross check. A disagreement is flagged.</td></tr>
-  <tr><td>CP and KCS merged into CPKC in May 2025.</td><td>Volumes are summed into one continuous CPKC series. Speed and dwell start as a new series, because CPKC's 20.0 mph is not comparable to CP's 21.7 or KCS's 25.9.</td></tr>
-  <tr><td>Each railroad measures service its own way.</td><td>Speed and dwell are never compared or averaged across railroads. Each railroad is compared only to its own history.</td></tr>
+  <tr><td>CP and KCS merged into CPKC in May 2025.</td><td>Volumes are summed into one continuous CPKC series. Speed and dwell start as a new series. An average cannot be stitched: CPKC's 20.0 mph blends two networks and the traffic once handed between them, so comparing it with CP's 21.7 or KCS's 25.9 would show a slowdown that is only a change in what is measured.</td></tr>
+  <tr><td>Service metrics differ by railroad in what they count.</td><td>Units match (mph, hours), so no conversion helps; the gap is in definitions and networks. Each railroad files its own STB methodology: Norfolk Southern's dwell excludes coal trains and intermodal units, Union Pacific's excludes stored and bad-order cars. Speed also reflects each network's terrain and traffic mix. Each railroad is compared only to its own history.</td></tr>
   <tr><td>Railroads correct past weeks.</td><td>Every load re-pulls the full window, and each correction is logged with its old and new value.</td></tr>
   <tr><td>Blanks, zeros and half cars in the source.</td><td>Blanks load as missing, never zero (4,355 values). Real zeros stay zeros (2,733 rows). Carloads allow decimals because CPKC reports half cars.</td></tr>
-  <tr><td>A simple run-rate beat the first model.</td><td>The model predicts a correction to the run-rate. The backtest result was accepted, not tuned against.</td></tr>
   <tr><td>Holidays distort weekly comparisons.</td><td>The five lowest weeks all fall at Christmas or New Year. Each week is compared with the week exactly 52 weeks earlier, which keeps holidays aligned.</td></tr>
 </table>
 
