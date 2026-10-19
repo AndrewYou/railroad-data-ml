@@ -11,8 +11,7 @@ from psycopg.types.numeric import FloatLoader
 from rail import db
 
 YEAR = pd.Timedelta(days=364)
-ROLLING_WEEKS = 4  # YoY % lines use 4-week totals, which smooth one-off weeks
-WINDOWS = {"1 Week": 1, "2 Weeks": 2, "4 Weeks": 4}  # windows for the map and the drivers
+WINDOWS = {"1 Week": 1, "2 Weeks": 2, "4 Weeks": 4}  # one comparison window for every YoY view
 SEGMENTS = ("Intermodal", "Coal", "Merchandise")
 SHARE_GROUPS = {  # railroads that compete for the same freight; None = the whole network
     "All Railroads": None, "West: UP vs. BNSF": ("UP", "BNSF"), "East: CSX vs. NS": ("CSX", "NS")}
@@ -159,7 +158,7 @@ def quarter_to_date(orig: pd.DataFrame, quarter: pd.Period, by: list[str]) -> pd
 def drivers(orig: pd.DataFrame, weeks: int, by: str, top: int = 6) -> pd.DataFrame:
     """The latest `weeks` vs the same weeks last year: each group's change as points of the network's YoY %.
 
-    Contributions add up to the network's YoY %. Groups beyond the `top` largest are folded into 'All Other'.
+    Contributions add up to the network's YoY %. Groups beyond the `top` largest are folded into one bar.
     """
     last = orig["week_ending"].max()
     first = last - pd.Timedelta(weeks=weeks - 1)
@@ -167,21 +166,23 @@ def drivers(orig: pd.DataFrame, weeks: int, by: str, top: int = 6) -> pd.DataFra
     change = (now - before.reindex(now.index, fill_value=0)).sort_values(key=abs, ascending=False)
     if len(change) > top + 1:
         others = change.iloc[top:]
-        change = pd.concat([change.iloc[:top], pd.Series({f"All Other ({len(others)})": others.sum()})])
+        plural = {"commodity": "Commodities", "railroad": "Railroads", "segment": "Segments"}[by]
+        bucket = f"{len(others)} Other {plural}"  # not "All Other", which is a real commodity
+        change = pd.concat([change.iloc[:top], pd.Series({bucket: others.sum()})])
     out = pd.DataFrame({"Change vs LY": change, "Contribution (pp)": change / before.sum() * 100})
     out.attrs = period(first, last) | {"network_change": float(now.sum() - before.sum()),
                                        "network_yoy": float((now.sum() / before.sum() - 1) * 100)}
     return out
 
 
-def weekly_volume(orig: pd.DataFrame, by: str | None) -> pd.DataFrame:
-    """Weekly originated carloads per group, and YoY % on 4-week totals."""
+def weekly_volume(orig: pd.DataFrame, by: str | None, weeks: int) -> pd.DataFrame:
+    """Weekly originated carloads per group, and YoY % on rolling `weeks` totals."""
     group = orig[by] if by else pd.Series("Network", index=orig.index)
     weekly = orig.assign(group=group).groupby(["group", "week_ending"], as_index=False)["carloads"].sum()
     weekly = with_last_year(weekly, ["group"], "carloads")
     rolled = weekly.sort_values("week_ending").groupby("group")[["carloads", "carloads_ly"]].transform(
-        lambda s: s.rolling(ROLLING_WEEKS).sum())
-    weekly["yoy_4wk"] = pct_change(rolled["carloads"], rolled["carloads_ly"])
+        lambda s: s.rolling(weeks).sum())
+    weekly["yoy"] = pct_change(rolled["carloads"], rolled["carloads_ly"])
     return weekly
 
 
@@ -198,12 +199,12 @@ def market_share(orig: pd.DataFrame, railroads: tuple[str, ...] | None, segment:
     return (rolled.div(rolled.sum(axis=1), axis=0) * 100).dropna(how="all").reset_index()
 
 
-def service_yoy(svc: pd.DataFrame, measure: str) -> pd.DataFrame:
-    """Each railroad's metric vs its own same 4 weeks last year, in %."""
+def service_yoy(svc: pd.DataFrame, measure: str, weeks: int) -> pd.DataFrame:
+    """Each railroad's metric (rolling `weeks` average) vs its own same weeks last year, in %."""
     rows = svc[svc["measure"] == measure][["week_ending", "railroad", "value"]]
     rows = with_last_year(rows, ["railroad"], "value").sort_values("week_ending")
-    rolled = rows.groupby("railroad")[["value", "value_ly"]].transform(lambda s: s.rolling(ROLLING_WEEKS).mean())
-    rows["yoy_4wk"] = pct_change(rolled["value"], rolled["value_ly"])
+    rolled = rows.groupby("railroad")[["value", "value_ly"]].transform(lambda s: s.rolling(weeks).mean())
+    rows["yoy"] = pct_change(rolled["value"], rolled["value_ly"])
     return rows
 
 

@@ -1,6 +1,8 @@
 """Plotly figures. One palette per theme, one style, and a high-resolution PNG export on every chart."""
 from dataclasses import dataclass
 
+import textwrap
+
 import pandas as pd
 import plotly.graph_objects as go
 
@@ -81,32 +83,37 @@ def volume(weekly: pd.DataFrame, metric: str, since: pd.Timestamp, height: int) 
     for group, g in rows.groupby("group", sort=False):
         color = color_for(group)
         if metric == "YoY %":
-            fig.add_scatter(x=g["week_ending"], y=g["yoy_4wk"], name=group, line=dict(color=color, width=2),
+            fig.add_scatter(x=g["week_ending"], y=g["yoy"], name=group, line=dict(color=color, width=2),
                             hovertemplate="%{y:+.1f}%")
         else:
             fig.add_scatter(x=g["week_ending"], y=g["carloads"], name=group, line=dict(color=color, width=2),
                             hovertemplate="%{y:,.0f}")
     if metric == "YoY %":
         zero_line(fig)
-    return styled(fig, height, "YoY %, 4-Week Total" if metric == "YoY %" else "Carloads / Week")
+    return styled(fig, height, "YoY %" if metric == "YoY %" else "Carloads / Week")
 
 
 def drivers(df: pd.DataFrame, network_yoy: float, height: int) -> go.Figure:
     """Waterfall: each driver's points of YoY change, stepping from 0 to the network's YoY %."""
     df = df.sort_values("Contribution (pp)", ascending=False)
-    labels = [*df.index, "Network"]
+    labels = ["<br>".join(textwrap.wrap(name, 16)) for name in [*df.index, "Network"]]  # at most 2 lines
     values = [*df["Contribution (pp)"], network_yoy]
     changes = [*df["Change vs LY"], None]
+    running = df["Contribution (pp)"].cumsum()
+    low, high = min(0, running.min(), network_yoy), max(0, running.max(), network_yoy)
+    pad = (high - low) * 0.2 or 1  # room for the value labels, so the plot area never resizes
     fig = go.Figure(go.Waterfall(
-        x=labels, y=values, measure=["relative"] * len(df) + ["total"],
+        x=labels, y=values, measure=["relative"] * len(df) + ["total"], cliponaxis=False,
         text=[f"{v:+.1f}" for v in values], textposition="outside", textfont=dict(size=11, color=P.ink_2),
         increasing=dict(marker=dict(color=P.better)), decreasing=dict(marker=dict(color=P.worse)),
         totals=dict(marker=dict(color=P.muted)), connector=dict(line=dict(color=P.baseline, width=1)),
         customdata=changes,
         hovertemplate="<b>%{x}</b><br>%{y:+.2f} pts of network YoY<br>%{customdata:+,.0f} carloads<extra></extra>"))
     fig = styled(fig, height, "YoY Change (Percentage Points)", hover="closest")
-    fig.update_xaxes(tickfont=dict(size=11))
-    fig.update_yaxes(ticksuffix="", zeroline=True, zerolinecolor=P.baseline)
+    fig.update_layout(margin=dict(l=56, r=4, t=12, b=40))
+    fig.update_xaxes(tickfont=dict(size=11), tickangle=0, automargin=False)
+    fig.update_yaxes(range=[low - pad * (low < 0), high + pad], automargin=False,
+                     zeroline=True, zerolinecolor=P.baseline)
     return fig
 
 
@@ -126,7 +133,7 @@ def share(df: pd.DataFrame, y_title: str, height: int, reference: float | None =
 def service_yoy(df: pd.DataFrame, label: str, higher_is_better: bool, height: int) -> go.Figure:
     fig = go.Figure()
     for railroad, g in df.groupby("railroad"):
-        fig.add_scatter(x=g["week_ending"], y=g["yoy_4wk"], name=railroad,
+        fig.add_scatter(x=g["week_ending"], y=g["yoy"], name=railroad,
                         line=dict(color=color_for(railroad), width=2), hovertemplate="%{y:+.1f}%")
     zero_line(fig)
     direction = "Up Is Better" if higher_is_better else "Down Is Better"

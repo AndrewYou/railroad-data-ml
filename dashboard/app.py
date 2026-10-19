@@ -48,12 +48,17 @@ if data.data_version() is None or (orig_all := data.originated()).empty:
 status = data.status()
 week = pd.Timestamp(status["carloads_week"])
 
-title, rr_col, export_col, status_col = st.columns([2.8, 3.2, 0.8, 3.4], vertical_alignment="center")
+title, rr_col, window_col, export_col, status_col = st.columns([2.6, 2.45, 1.5, 0.7, 3.75],
+                                                               vertical_alignment="center")
 title.markdown("<div style='font-size:1.6rem;font-weight:700;line-height:1.2;margin-bottom:1rem'>🛢️ Daniel Plainview's Dashboard</div>",
                unsafe_allow_html=True)  # plain line: a heading's extra spacing would sit lower than the controls
 all_railroads = data.active_railroads()
 railroads = rr_col.multiselect("Railroads", all_railroads, default=all_railroads, label_visibility="collapsed",
                                placeholder="Pick railroads")
+window = toggle(window_col, list(data.WINDOWS), "window", default="4 Weeks")  # every YoY view uses it
+weeks = data.WINDOWS[window]
+latest = "latest week" if weeks == 1 else f"latest {weeks} weeks"
+per_point = "that week" if weeks == 1 else f"the {weeks} weeks ending that week"  # for YoY line captions
 export_slot = export_col.empty()
 ok = status["last_status"] == "succeeded" and not status["open_issues"]
 status_col.markdown(
@@ -78,32 +83,29 @@ def recent(df: pd.DataFrame, keys: list[str], value: str, how: str, weeks: int) 
 map_col, right_col = st.columns([6.5, 5.5])
 
 with map_col, st.container(border=True):
-    current = st.session_state.get("map_window", "4 Weeks")  # the title shows the window chosen below
-    (map_window_col,) = panel_header(f"Where: Latest {current} vs. Last Year", 2.6, title_width=3.0)
-    map_window = toggle(map_window_col, list(data.WINDOWS), "map_window", default="4 Weeks")
-    map_weeks = data.WINDOWS[map_window]
-    layer = toggle(st, ["Terminal Dwell", "Grain Cars Loaded", "Grain Car Orders",
-                        "Grain Shuttle Turns", "Coal Loadings"], "map_layer")
+    (layer_col,) = panel_header(f"Where: Latest {window} vs. Last Year", 6.6, title_width=3.0)
+    layer = toggle(layer_col, ["Terminal Dwell", "Grain Cars Loaded", "Grain Car Orders",
+                               "Grain Shuttle Turns", "Coal Loadings"], "map_layer")
 
     if layer == "Terminal Dwell":
-        geo = recent(data.terminal_dwell(), ["railroad", "terminal", "lat", "lon"], "dwell_hours", "mean", map_weeks)
+        geo = recent(data.terminal_dwell(), ["railroad", "terminal", "lat", "lon"], "dwell_hours", "mean", weeks)
         fig = charts.terminal_map(geo, layer, MAP_H)
         note = "Click a terminal to render its Service vs. Own History panel below. Double-click the map to clear."
     elif layer == "Grain Cars Loaded":
-        geo = recent(data.grain_by_state(), ["state"], "cars", "sum", map_weeks)
+        geo = recent(data.grain_by_state(), ["state"], "cars", "sum", weeks)
         fig = charts.state_map(geo, "cars", layer, "cars loaded", MAP_H)
         note = "Grain cars loaded and billed by origin state, selected railroads combined. Blue = more than last year."
     elif layer == "Grain Car Orders":
-        geo = recent(data.grain_orders_by_state(), ["state"], "orders", "sum", map_weeks)
+        geo = recent(data.grain_orders_by_state(), ["state"], "orders", "sum", weeks)
         fig = charts.state_map(geo, "orders", layer, "car orders placed", MAP_H)
         note = "Grain car orders placed by state (shipper demand for cars), selected railroads combined. Blue = more than last year."
     elif layer == "Grain Shuttle Turns":
-        geo = recent(data.shuttle_turns_by_region(), ["railroad", "region"], "turns", "mean", map_weeks)
+        geo = recent(data.shuttle_turns_by_region(), ["railroad", "region"], "turns", "mean", weeks)
         fig = charts.railroad_markers(geo, "region", charts.SHUTTLE_REGIONS, "turns", layer,
                                       lambda r: "trips / month", MAP_H)
         note = "Average shuttle trips per month by destination, one marker per railroad (never summed). Blue = faster turns."
     else:
-        geo = recent(data.coal_by_basin(), ["railroad", "basin"], "loadings", "sum", map_weeks)
+        geo = recent(data.coal_by_basin(), ["railroad", "basin"], "loadings", "sum", weeks)
         fig = charts.railroad_markers(geo, "basin", charts.COAL_BASINS, "loadings", layer,
                                       lambda r: "carloads" if r == "CSX" else "unit trains", MAP_H)
         note = "One marker per railroad: CSX reports carloads, the others unit trains, so they are never summed."
@@ -120,26 +122,28 @@ with right_col:
         metric = toggle(metric_col, ["Carloads", "YoY %"], "volume_metric")
         by = toggle(by_col, ["Network", "Segment", "Railroad"], "volume_by")
         span = toggle(span_col, ["1Y", "2Y", "5Y"], "volume_span", default="2Y")
-        weekly = data.weekly_volume(orig, {"Network": None, "Segment": "segment", "Railroad": "railroad"}[by])
+        weekly = data.weekly_volume(orig, {"Network": None, "Segment": "segment", "Railroad": "railroad"}[by], weeks)
         since = weekly["week_ending"].max() - pd.DateOffset(years=int(span[0]))
         st.plotly_chart(charts.volume(weekly, metric, since, CHART_H),
                         config=charts.export_config(f"rail_volume_{by}_{week.date()}"))
         st.caption(("Weekly originated carloads." if metric == "Carloads" else
-                    "The latest 4 weeks' carloads vs. the same 4 weeks a year earlier.")
+                    f"Each point: carloads in {per_point} vs. the same weeks a year earlier.")
                    + " CPKC includes CP and KCS before the May 2025 merger.")
         export[f"Volume by {by}"] = weekly
 
     with st.container(border=True):
-        drivers_window_col, drivers_by_col = panel_header("What's Driving It", 2.6, 2.6, title_width=1.6)
-        drivers_window = toggle(drivers_window_col, list(data.WINDOWS), "drivers_window", default="4 Weeks")
+        (drivers_by_col,) = panel_header(f"What's Driving It: Latest {window} vs. Last Year", 2.6, title_width=3.6)
         drivers_by = toggle(drivers_by_col, ["Commodity", "Railroad", "Segment"], "drivers_by")
-        contrib = data.drivers(orig, data.WINDOWS[drivers_window], drivers_by.lower())
+        contrib = data.drivers(orig, weeks, drivers_by.lower())
         d = contrib.attrs
         st.plotly_chart(charts.drivers(contrib, d["network_yoy"], CHART_H),
-                        config=charts.export_config(f"rail_drivers_{drivers_window}_{week.date()}"))
+                        config=charts.export_config(f"rail_drivers_{window}_{week.date()}"))
         st.caption(
-            f"Originated carloads, **latest {drivers_window.lower()}** (weeks ending {d['first']} to {d['through']}) "
-            f"vs. **the same weeks a year earlier** ({d['first_ly']} to {d['through_ly']}): the network changed "
+            (f"Originated carloads, **week ending {d['through']}** vs. **the same week a year earlier** "
+             f"({d['through_ly']})" if weeks == 1 else
+             f"Originated carloads, **{latest}** (weeks ending {d['first']} to {d['through']}) "
+             f"vs. **the same weeks a year earlier** ({d['first_ly']} to {d['through_ly']})")
+            + f": the network changed "
             f"{d['network_change']:+,.0f} carloads ({d['network_yoy']:+.1f}%).")
         export[f"Drivers by {drivers_by}"] = contrib.reset_index(names=drivers_by)
 
@@ -174,12 +178,12 @@ with service_col, st.container(border=True):
         st.caption(f"{label} for **{railroad}** by week of year, against the range of earlier years.")
         export[f"{label} {railroad}"] = hist
     else:
-        yoy = data.service_yoy(svc, measure)
+        yoy = data.service_yoy(svc, measure, weeks)
         yoy = yoy[yoy["week_ending"] >= yoy["week_ending"].max() - pd.DateOffset(years=2)]
         st.plotly_chart(charts.service_yoy(yoy, label, higher_is_better, CHART_H),
                         config=charts.export_config(f"rail_{measure}_yoy_{week.date()}"))
-        st.caption("4-week average vs. the same weeks last year. Levels aren't comparable across railroads; "
-                   "changes are.")
+        st.caption(f"Each point: the average over {per_point} vs. the same weeks a year earlier."
+                   + " Levels aren't comparable across railroads; changes are.")
         export[f"{label} YoY"] = yoy
 
 with share_col, st.container(border=True):
@@ -240,8 +244,8 @@ with st.container(border=True):
                                        "Change vs. Last Year", "Contribution (Pct. Pts.)"]].sort_values(
         "Contribution (Pct. Pts.)", ascending=False)
 
-    dwell_col = f"Dwell (Hours, {map_weeks}-Week Avg)"
-    terminals = (recent(data.terminal_dwell(), ["railroad", "terminal"], "dwell_hours", "mean", map_weeks)
+    dwell_col = f"Dwell (Hours, {weeks}-Week Avg)"
+    terminals = (recent(data.terminal_dwell(), ["railroad", "terminal"], "dwell_hours", "mean", weeks)
                  .rename(columns={"railroad": "Railroad", "terminal": "Terminal", "dwell_hours": dwell_col,
                                   "dwell_hours_ly": "Last Year (Hours)", "yoy": "Change %"})
                  .sort_values("Change %", ascending=False))
@@ -278,9 +282,9 @@ export |= {"QTD Tracker": tracker, "Commodities": commodity_table, "Terminals": 
 
 def workbook(sheets: dict[str, pd.DataFrame]) -> bytes:
     about = pd.DataFrame({"": ["Data through week ending", "Loaded at", "Railroads", "Quarter (tables)",
-                               "Map window", "Drivers window", "Source"],
+                               "Comparison window", "Source"],
                           "Value": [str(week.date()), eastern(status["loaded_at"]), ", ".join(railroads),
-                                    f"Q{quarter.quarter} {quarter.year}", map_window, drivers_window,
+                                    f"Q{quarter.quarter} {quarter.year}", f"Latest {window} vs. same weeks last year",
                                     "USDA AgTransport (STB EP 724 filings): tb7q-kn5i, axkm-yjzy"]})
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
