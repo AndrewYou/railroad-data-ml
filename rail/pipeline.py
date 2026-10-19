@@ -1,6 +1,8 @@
 """Jobs: load both datasets (with run tracking and an email summary), and the hourly watcher."""
 import datetime as dt
 import logging
+import subprocess
+import sys
 import time
 
 from rail import alerts, api, checks, db, datasets
@@ -12,15 +14,22 @@ CHECK_EVERY = dt.timedelta(hours=1)
 BACKSTOP = dt.timedelta(days=7)  # load anyway if nothing has succeeded for this long
 
 
+HISTORY_START = dt.date(2017, 1, 1)  # the carloads dataset starts 2017-03-25
+
+
 def window_start(today: dt.date) -> dt.date:
-    """Keep five full calendar years plus the current year."""
+    """What each refresh re-fetches: five full calendar years plus the current year.
+
+    Older weeks are loaded once (backfill from HISTORY_START) and then kept as they are:
+    loads never delete, so the full history stays available to the dashboard and the nowcast.
+    """
     return dt.date(today.year - 5, 1, 1)
 
 
-def load_all() -> list[int]:
+def load_all(since: dt.date | None = None) -> list[int]:
     """Fetch and publish both datasets, one transaction each. Returns the run ids."""
-    since = window_start(dt.date.today())
-    run_ids = []
+    since = since or window_start(dt.date.today())
+    run_ids, all_ok = [], True
     for ds in datasets.ALL:
         run_id = start_run(ds)
         try:
@@ -30,11 +39,23 @@ def load_all() -> list[int]:
         except Exception as e:
             log.exception("%s load failed", ds.name)
             finish_run(run_id, "failed", error=f"{type(e).__name__}: {e}")
+            all_ok = False
         run_ids.append(run_id)
 
     with db.connect() as conn:
         alerts.send(*alerts.run_summary(conn, run_ids))
+    if all_ok:
+        run_nowcast()
     return run_ids
+
+
+def run_nowcast() -> None:
+    """Refresh the quarter nowcast. A separate process, so rail/ stays free of pandas and scikit-learn,
+    and a nowcast failure is reported without failing the data load."""
+    result = subprocess.run([sys.executable, "-m", "nowcast"], capture_output=True, text=True)
+    if result.returncode:
+        log.error("nowcast failed:\n%s", result.stderr)
+        alerts.send("Nowcast failed (data load unaffected)", result.stderr[-4000:])
 
 
 def watch() -> None:
@@ -42,7 +63,7 @@ def watch() -> None:
     while True:
         try:
             if load_is_due():
-                load_all()
+                load_all(None if has_loaded() else HISTORY_START)  # the first load backfills full history
             with db.connect() as conn:
                 late = checks.flag_stale_data(conn, dt.datetime.now(dt.timezone.utc))
             if late:
@@ -50,6 +71,11 @@ def watch() -> None:
         except Exception:
             log.exception("watch cycle failed; retrying next cycle")
         time.sleep(CHECK_EVERY.total_seconds())
+
+
+def has_loaded() -> bool:
+    with db.connect() as conn:
+        return conn.execute("SELECT count(DISTINCT dataset) = 2 FROM ops.job_run WHERE status = 'succeeded'").fetchone()[0]
 
 
 def load_is_due() -> bool:

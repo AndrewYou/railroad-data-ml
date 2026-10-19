@@ -28,6 +28,15 @@ projection = Σ actual(w)              for weeks w already reported this quarter
   (`Σ last 13 weeks / Σ same 13 weeks a year earlier`). This is the analyst's run-rate shortcut.
 - **Model:** predicts `g` for the remaining weeks. The training target is
   `log(Σ remaining weeks / Σ same weeks last year)`. Using log makes growth and decline symmetric.
+- **Revision (after the first backtest):** the model now predicts the *correction* to the baseline,
+  `target − log(baseline g)`, and `g = baseline g × exp(correction)`. The baseline was already very good
+  (1.75% mean error); learning growth from scratch did worse (2.13%) because ~15 training quarters is
+  too little to relearn the run-rate. Starting from the baseline keeps the model close to it when the
+  evidence is weak. This was the one planned change; we accept its result rather than keep tuning on
+  the same backtest.
+- **Revision (history):** the pipeline's first load now backfills from 2017 (refreshes still re-fetch 5 years),
+  so the nowcast trains on 2018 Q2 onward and backtests 30 quarters (2019 Q2 – 2026 Q3): baseline 2.35%,
+  model 2.48%. The baseline still wins.
 
 The model's only job is to predict a better growth rate than the run-rate. Both methods share
 the rest of the formula, so the comparison is fair. The 364-day offset keeps weekdays aligned,

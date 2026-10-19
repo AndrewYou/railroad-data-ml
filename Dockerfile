@@ -7,5 +7,6 @@ COPY .streamlit .streamlit
 COPY rail rail
 COPY sql sql
 COPY dashboard dashboard
+COPY nowcast nowcast
 COPY tests tests
 CMD ["python", "-m", "rail", "watch"]

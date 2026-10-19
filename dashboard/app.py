@@ -1,6 +1,6 @@
 """Daniel Plainview's Dashboard: what's moving on U.S. rail, what's driving it, and how service is trending.
 
-Run: streamlit run dashboard/app.py   (with the repo root on PYTHONPATH)
+A page of dashboard/main.py, which sets up the page and theme.
 """
 import io
 import re
@@ -11,21 +11,19 @@ import streamlit as st
 import charts
 import data
 
-st.set_page_config(page_title="Daniel Plainview's Dashboard", page_icon="🛢️", layout="wide")
-st.markdown("""<style>
-  .block-container {padding: 3rem 1.5rem 0.5rem; max-width: 100%;}
-  div[data-testid="stVerticalBlock"] {gap: 0.35rem;}
-</style>""", unsafe_allow_html=True)
-
 MAP_H, CHART_H, TABLE_H = 470, 215, 290
-charts.set_theme(st.context.theme.type == "dark")
 
 
 def panel_header(title: str, *control_widths: float, title_width: float = 2.2):
     """A bold panel title with room for inline toggles to its right."""
     cols = st.columns([title_width, *control_widths], vertical_alignment="center")
-    cols[0].markdown(f"**{title}**")
+    cols[0].markdown(f"**{title}**", unsafe_allow_html=True)
     return cols[1:]
+
+
+def underline(text: str) -> str:
+    """Marks text that follows the Trailing Window, so a reader sees what the button changed."""
+    return f"<u>{text}</u>"
 
 
 def toggle(container, options: list[str], key: str, default: str | None = None) -> str:
@@ -63,8 +61,8 @@ window_label.markdown(
     "and the YoY % modes of What&#39;s Moving and Service.'>Trailing Window ⓘ</div>", unsafe_allow_html=True)
 window = toggle(window_buttons, list(data.WINDOWS), "window", default="4 Weeks")  # every YoY view uses it
 weeks = data.WINDOWS[window]
-latest = "trailing week" if weeks == 1 else f"trailing {weeks} weeks"
-per_point = "that week" if weeks == 1 else f"the {weeks} weeks ending that week"  # for YoY line captions
+latest = f"trailing {underline(f'{weeks} weeks')}"
+per_point = underline("that week") if weeks == 1 else f"the {underline(f'{weeks} weeks')} ending that week"
 
 ok = status["last_status"] == "succeeded" and not status["open_issues"]
 issues = "" if ok else f"<br><b>{status['open_issues']} open issue(s)</b> in ops.issue"
@@ -91,7 +89,7 @@ def recent(df: pd.DataFrame, keys: list[str], value: str, how: str, weeks: int) 
 map_col, right_col = st.columns([6.5, 5.5])
 
 with map_col, st.container(border=True):
-    (layer_col,) = panel_header(f"Where: Trailing {window} vs. Last Year", 6.6, title_width=3.0)
+    (layer_col,) = panel_header(f"Where: Trailing {underline(window)} vs. Last Year", 6.6, title_width=3.0)
     layer = toggle(layer_col, ["Terminal Dwell", "Grain Cars Loaded", "Grain Car Orders",
                                "Grain Shuttle Turns", "Coal Loadings"], "map_layer")
 
@@ -136,23 +134,23 @@ with right_col:
                         config=charts.export_config(f"rail_volume_{by}_{week.date()}"))
         st.caption(("Weekly originated carloads." if metric == "Carloads" else
                     f"Each point: carloads in {per_point} vs. the same weeks a year earlier.")
-                   + " CPKC includes CP and KCS before the May 2025 merger.")
+                   + " CPKC includes CP and KCS before the May 2025 merger.", unsafe_allow_html=True)
         export[f"Volume by {by}"] = weekly
 
     with st.container(border=True):
-        (drivers_by_col,) = panel_header(f"What's Driving It: Trailing {window} vs. Last Year", 2.6, title_width=3.6)
+        (drivers_by_col,) = panel_header(f"What's Driving It: Trailing {underline(window)} vs. Last Year", 2.6, title_width=3.6)
         drivers_by = toggle(drivers_by_col, ["Commodity", "Railroad", "Segment"], "drivers_by")
         contrib = data.drivers(orig, weeks, drivers_by.lower())
         d = contrib.attrs
         st.plotly_chart(charts.drivers(contrib, d["network_yoy"], CHART_H),
                         config=charts.export_config(f"rail_drivers_{window}_{week.date()}"))
         st.caption(
-            (f"Originated carloads, **week ending {d['through']}** vs. **the same week a year earlier** "
+            (f"Originated carloads, **{underline('week')} ending {d['through']}** vs. **the same week a year earlier** "
              f"({d['through_ly']})" if weeks == 1 else
              f"Originated carloads, **{latest}** (weeks ending {d['first']} to {d['through']}) "
              f"vs. **the same weeks a year earlier** ({d['first_ly']} to {d['through_ly']})")
             + f": the network changed "
-            f"{d['network_change']:+,.0f} carloads ({d['network_yoy']:+.1f}%).")
+            f"{d['network_change']:+,.0f} carloads ({d['network_yoy']:+.1f}%).", unsafe_allow_html=True)
         export[f"Drivers by {drivers_by}"] = contrib.reset_index(names=drivers_by)
 
 
@@ -191,7 +189,7 @@ with service_col, st.container(border=True):
         st.plotly_chart(charts.service_yoy(yoy, label, higher_is_better, CHART_H),
                         config=charts.export_config(f"rail_{measure}_yoy_{week.date()}"))
         st.caption(f"Each point: the average over {per_point} vs. the same weeks a year earlier."
-                   + " Levels aren't comparable across railroads; changes are.")
+                   + " Levels aren't comparable across railroads; changes are.", unsafe_allow_html=True)
         export[f"{label} YoY"] = yoy
 
 with share_col, st.container(border=True):

@@ -33,7 +33,7 @@ services:
   dashboard:  # http://localhost:8501
     build: .
     # apply schema and views first, so the dashboard never runs against older SQL than its code
-    command: ["sh", "-c", "python -m rail init && exec streamlit run dashboard/app.py --server.port=8501 --server.address=0.0.0.0"]
+    command: ["sh", "-c", "python -m rail init && exec streamlit run dashboard/main.py --server.port=8501 --server.address=0.0.0.0"]
     environment:
       DATABASE_URL: postgresql://rail:rail@db:5432/rail
     ports: ["8501:8501"]

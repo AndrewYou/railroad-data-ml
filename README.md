@@ -23,7 +23,7 @@ docker compose up -d --build
 | Database (any client) | `postgresql://rail:rail@localhost:5432/rail` |
 | Alert emails (Mailpit) | http://localhost:8025 |
 
-The worker loads five years of history on first start (usually ~5 minutes; up to ~20 when the USDA API is slow), then checks hourly for new data.
+The worker loads the full history (from 2017) on first start (usually ~4 minutes; longer when the USDA API is slow), then checks hourly for new data.
 
 ```bash
 docker compose run --rm worker python -m rail load     # load now
@@ -57,7 +57,7 @@ USDA API ──► stage (temp table, as received) ──► row checks ──�
 ```
 
 - **When it runs.** Every hour the worker reads each dataset's `rowsUpdatedAt` from the API metadata (one small request). If it's newer than our last successful load, it loads. Railroads file on Wednesday and USDA republishes Thursday morning, so new data lands within an hour. As a backstop it loads anyway if nothing has succeeded in 7 days.
-- **What it fetches.** Every load re-fetches the full window: January 1 five years ago to today (currently 2021-01-01 onward). That picks up restatements of any age, and the first load and the weekly refresh are the same code.
+- **What it fetches.** The first load backfills from 2017. Every later load re-fetches January 1 five years ago to today (currently 2021-01-01 onward), which picks up restatements; older weeks are kept as loaded. `python -m rail backfill` reloads everything.
 - **How it publishes.** One transaction per dataset. Rows are inserted or updated, never deleted, so a truncated API response can't wipe history. If anything errors, the transaction rolls back and the published data is unchanged.
 
 ## Data checks

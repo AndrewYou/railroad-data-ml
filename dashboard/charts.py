@@ -228,3 +228,52 @@ def railroad_markers(df: pd.DataFrame, place: str, centers: dict, value: str, va
         hovertemplate="<b>%{customdata[0]}</b>, %{customdata[1]}<br>%{customdata[2]:,.1f} %{customdata[5]}"
                       "<br>Last year %{customdata[3]:,.1f} (%{customdata[4]:+.1f}%)<extra></extra>"))
     return _usa(fig, height)
+
+
+# Nowcast ----------------------------------------------------------------------------------
+
+METHODS = {"baseline": "Baseline", "model": "Model v2"}  # defined in full on the page
+
+
+def method_color(method: str) -> str:
+    return {"model": P.series[0], "baseline": P.series[1]}.get(method, P.ink_2)
+
+
+def projections_vs_actuals(df: pd.DataFrame, height: int) -> go.Figure:
+    """Each backtest quarter: what each method projected at the chosen week, and what actually happened."""
+    fig = go.Figure()
+    fig.add_scatter(x=df["quarter"], y=df["actual"], name="Actual", mode="lines+markers",
+                    line=dict(color=P.ink_2, width=2), marker=dict(size=7), hovertemplate="%{y:,.0f}")
+    for method, label in METHODS.items():
+        fig.add_scatter(x=df["quarter"], y=df[method], name=label, mode="lines+markers",
+                        line=dict(color=method_color(method), width=2), marker=dict(size=7),
+                        hovertemplate="%{y:,.0f}")
+    return styled(fig, height, "Originated Carloads, Quarter Total")
+
+
+def error_bars(df: pd.DataFrame, height: int) -> go.Figure:
+    """Mean % error per group, one bar per method side by side."""
+    fig = go.Figure()
+    for method, label in METHODS.items():
+        fig.add_bar(x=df.index, y=df[method], name=label, marker=dict(color=method_color(method), cornerradius=4),
+                    hovertemplate="%{y:.2f}%")
+    fig = styled(fig, height, "Mean Error, %", hover="x unified")
+    fig.update_layout(barmode="group", bargap=0.25, bargroupgap=0.08)
+    fig.update_yaxes(ticksuffix="%")
+    return fig
+
+
+def experiment_bars(df: pd.DataFrame, height: int) -> go.Figure:
+    """Recorded experiment results: each method's mean error on the same quarters, baseline in orange."""
+    colors = [method_color("baseline" if label.startswith("Baseline") else "model") for label in df.index]
+    fig = go.Figure(go.Bar(
+        x=df["error"], y=df.index, orientation="h", marker=dict(color=colors, cornerradius=4),
+        text=[f"{v:.2f}%" for v in df["error"]], textposition="outside", cliponaxis=False,
+        textfont=dict(size=11, color=P.ink_2), hovertemplate="%{y}: %{x:.2f}%<extra></extra>"))
+    fig.add_vline(x=df["error"].iloc[0], line_width=1, line_color=method_color("baseline"))
+    fig = styled(fig, height, hover="closest")
+    fig.update_layout(margin=dict(l=4, r=40, t=8, b=4))
+    fig.update_xaxes(title="Mean Error, %", title_font_size=11, ticksuffix="%", showgrid=True, gridcolor=P.grid,
+                     range=[0, df["error"].max() * 1.15])
+    fig.update_yaxes(autorange="reversed", gridcolor=P.surface)
+    return fig

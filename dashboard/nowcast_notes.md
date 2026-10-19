@@ -1,0 +1,4 @@
+- **The baseline run-rate is hard to beat.**
+- **Correcting the baseline beat predicting growth directly** (Model v2 2.09% vs. v1 2.13%), and more history helped further (1.93%). Neither beat the baseline, so it stays in use.
+- **The model helps in shocks**, and terminal dwell became useful once the 2021–22 service crisis was in the training data.
+- **Limits:** ~30 test quarters is still a small sample. Results recorded Oct 19, 2026.

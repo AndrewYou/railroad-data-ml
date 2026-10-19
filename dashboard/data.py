@@ -25,15 +25,20 @@ SERVICE_METRICS = {  # measure -> (label, unit, higher is better)
 # Queries: cached until the next successful load ------------------------------------------
 
 @st.cache_data(ttl=60)
-def data_version() -> int | None:
-    """The latest successful load, or None until both datasets have loaded once. New data shows within a minute."""
+def data_version() -> str | None:
+    """Latest successful load and nowcast run, or None until both datasets have loaded once.
+
+    Used as the cache key, so new data (or a new nowcast) shows within a minute.
+    """
     try:
         with db.connect() as conn:
-            return conn.execute("""
-                SELECT CASE WHEN count(DISTINCT dataset) = 2 THEN max(run_id) END
-                FROM ops.job_run WHERE status = 'succeeded'""").fetchone()[0]
-    except psycopg.errors.UndefinedTable:  # the worker hasn't created the schema yet
+            load, nowcast = conn.execute("""
+                SELECT (SELECT CASE WHEN count(DISTINCT dataset) = 2 THEN max(run_id) END
+                        FROM ops.job_run WHERE status = 'succeeded'),
+                       (SELECT max(run_id) FROM ml.run)""").fetchone()
+    except psycopg.errors.UndefinedTable:  # the schema hasn't been created yet
         return None
+    return None if load is None else f"{load}-{nowcast}"
 
 
 def query(sql: str) -> pd.DataFrame:
@@ -41,7 +46,7 @@ def query(sql: str) -> pd.DataFrame:
 
 
 @st.cache_data
-def _query(sql: str, version: int | None) -> pd.DataFrame:
+def _query(sql: str, version: str | None) -> pd.DataFrame:
     with db.connect() as conn:
         conn.adapters.register_loader("numeric", FloatLoader)  # numeric -> float, not Decimal
         cur = conn.execute(sql)
@@ -97,6 +102,30 @@ def status() -> dict:
                  WHERE run_id IN (SELECT max(run_id) FROM ops.job_run GROUP BY dataset)) AS open_issues,
                (SELECT status FROM ops.job_run ORDER BY run_id DESC LIMIT 1) AS last_status""").iloc[0]
     return row.to_dict()
+
+
+# Nowcast (written by python -m nowcast) -------------------------------------------------
+
+def nowcast_run() -> dict | None:
+    run = query("SELECT * FROM ml.run ORDER BY run_id DESC LIMIT 1")
+    return None if run.empty else run.iloc[0].to_dict()
+
+
+def nowcast_backtest() -> pd.DataFrame:
+    return query("SELECT railroad, quarter, checkpoint, actual, baseline, model FROM ml.backtest")
+
+
+def nowcast_projection() -> pd.DataFrame:
+    return query("SELECT * FROM ml.projection WHERE run_id = (SELECT max(run_id) FROM ml.run)")
+
+
+def feature_importance() -> pd.DataFrame:
+    return query("SELECT feature, description, importance FROM ml.feature_importance ORDER BY importance DESC")
+
+
+def backtest_errors(backtest: pd.DataFrame) -> pd.DataFrame:
+    """Absolute % error of each method's quarter total, one row per projection."""
+    return backtest.assign(**{m: (backtest[m] / backtest["actual"] - 1).abs() * 100 for m in ("baseline", "model")})
 
 
 # Comparisons ---------------------------------------------------------------------------

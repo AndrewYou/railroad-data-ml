@@ -6,7 +6,7 @@ import psycopg
 
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://rail:rail@localhost:5432/rail")
 SQL_DIR = Path(__file__).parent.parent / "sql"
-SQL_FILES = ("schema.sql", "terminals.sql", "views.sql")  # tables + reference data, then views
+SQL_FILES = ("schema.sql", "terminals.sql", "views.sql", "nowcast.sql")  # tables, reference data, views, ml
 
 
 def connect(url: str | None = None) -> psycopg.Connection:
