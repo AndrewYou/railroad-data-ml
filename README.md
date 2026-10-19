@@ -32,7 +32,7 @@ docker compose run --rm worker python -m pytest -q     # run the tests
 
 ## Dashboard
 
-"Daniel Plainview's Dashboard": one screen. The top bar picks the railroads and one **comparison window** (latest 1, 2 or 4 weeks vs the same weeks a year earlier) that every YoY view uses: the map, drivers, terminals table, and the YoY % modes of volume and service.
+"Daniel Plainview's Dashboard": one screen. The top bar picks the railroads and one **trailing window** (the trailing 1, 2 or 4 weeks vs the same weeks a year earlier) that every YoY view uses: the map, drivers, terminals table, and the YoY % modes of volume and service.
 
 | Panel | Question it answers | Toggles |
 |---|---|---|

@@ -48,23 +48,31 @@ if data.data_version() is None or (orig_all := data.originated()).empty:
 status = data.status()
 week = pd.Timestamp(status["carloads_week"])
 
-title, rr_col, window_col, export_col, status_col = st.columns([2.6, 2.45, 1.5, 0.7, 3.75],
+title, rr_col, window_col, status_col, export_col = st.columns([2.3, 3.0, 2.4, 1.9, 0.6],
                                                                vertical_alignment="center")
 title.markdown("<div style='font-size:1.6rem;font-weight:700;line-height:1.2;margin-bottom:1rem'>🛢️ Daniel Plainview's Dashboard</div>",
                unsafe_allow_html=True)  # plain line: a heading's extra spacing would sit lower than the controls
 all_railroads = data.active_railroads()
 railroads = rr_col.multiselect("Railroads", all_railroads, default=all_railroads, label_visibility="collapsed",
                                placeholder="Pick railroads")
-window = toggle(window_col, list(data.WINDOWS), "window", default="4 Weeks")  # every YoY view uses it
+
+window_label, window_buttons = window_col.columns([0.75, 2.1], vertical_alignment="center")
+window_label.markdown(
+    "<div style='font-size:0.85rem;margin-bottom:1rem;white-space:nowrap' title='Every year-over-year view compares the trailing "
+    "1, 2 or 4 weeks with the same weeks a year earlier: the map, What&#39;s Driving It, the Terminals table, "
+    "and the YoY % modes of What&#39;s Moving and Service.'>Trailing Window ⓘ</div>", unsafe_allow_html=True)
+window = toggle(window_buttons, list(data.WINDOWS), "window", default="4 Weeks")  # every YoY view uses it
 weeks = data.WINDOWS[window]
-latest = "latest week" if weeks == 1 else f"latest {weeks} weeks"
+latest = "trailing week" if weeks == 1 else f"trailing {weeks} weeks"
 per_point = "that week" if weeks == 1 else f"the {weeks} weeks ending that week"  # for YoY line captions
-export_slot = export_col.empty()
+
 ok = status["last_status"] == "succeeded" and not status["open_issues"]
+issues = "" if ok else f"<br><b>{status['open_issues']} open issue(s)</b> in ops.issue"
 status_col.markdown(
-    f"{'✅' if ok else '⚠️'} Data Through Week Ending **{week:%a %b} {week.day}, {week.year}** · "
-    f"Loaded {eastern(status['loaded_at'])}"
-    + ("" if ok else f" · **{status['open_issues']} Open Issue(s)** in `ops.issue`"))
+    f"<div style='font-size:0.78rem;line-height:1.35;margin-bottom:1rem'>{'✅' if ok else '⚠️'} Data Through "
+    f"Week Ending <b>{week:%a %b} {week.day}, {week.year}</b><br>Loaded {eastern(status['loaded_at'])}{issues}</div>",
+    unsafe_allow_html=True)
+export_slot = export_col.empty()
 
 if not railroads:
     st.warning("Pick at least one railroad.")
@@ -83,7 +91,7 @@ def recent(df: pd.DataFrame, keys: list[str], value: str, how: str, weeks: int) 
 map_col, right_col = st.columns([6.5, 5.5])
 
 with map_col, st.container(border=True):
-    (layer_col,) = panel_header(f"Where: Latest {window} vs. Last Year", 6.6, title_width=3.0)
+    (layer_col,) = panel_header(f"Where: Trailing {window} vs. Last Year", 6.6, title_width=3.0)
     layer = toggle(layer_col, ["Terminal Dwell", "Grain Cars Loaded", "Grain Car Orders",
                                "Grain Shuttle Turns", "Coal Loadings"], "map_layer")
 
@@ -132,7 +140,7 @@ with right_col:
         export[f"Volume by {by}"] = weekly
 
     with st.container(border=True):
-        (drivers_by_col,) = panel_header(f"What's Driving It: Latest {window} vs. Last Year", 2.6, title_width=3.6)
+        (drivers_by_col,) = panel_header(f"What's Driving It: Trailing {window} vs. Last Year", 2.6, title_width=3.6)
         drivers_by = toggle(drivers_by_col, ["Commodity", "Railroad", "Segment"], "drivers_by")
         contrib = data.drivers(orig, weeks, drivers_by.lower())
         d = contrib.attrs
@@ -284,7 +292,7 @@ def workbook(sheets: dict[str, pd.DataFrame]) -> bytes:
     about = pd.DataFrame({"": ["Data through week ending", "Loaded at", "Railroads", "Quarter (tables)",
                                "Comparison window", "Source"],
                           "Value": [str(week.date()), eastern(status["loaded_at"]), ", ".join(railroads),
-                                    f"Q{quarter.quarter} {quarter.year}", f"Latest {window} vs. same weeks last year",
+                                    f"Q{quarter.quarter} {quarter.year}", f"Trailing {window} vs. same weeks last year",
                                     "USDA AgTransport (STB EP 724 filings): tb7q-kn5i, axkm-yjzy"]})
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
