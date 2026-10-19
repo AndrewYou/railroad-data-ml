@@ -78,7 +78,8 @@ def recent(df: pd.DataFrame, keys: list[str], value: str, how: str, weeks: int) 
 map_col, right_col = st.columns([6.5, 5.5])
 
 with map_col, st.container(border=True):
-    (map_window_col,) = panel_header("Where: Latest Weeks vs. Last Year", 2.6, title_width=3.0)
+    current = st.session_state.get("map_window", "4 Weeks")  # the title shows the window chosen below
+    (map_window_col,) = panel_header(f"Where: Latest {current} vs. Last Year", 2.6, title_width=3.0)
     map_window = toggle(map_window_col, list(data.WINDOWS), "map_window", default="4 Weeks")
     map_weeks = data.WINDOWS[map_window]
     layer = toggle(st, ["Terminal Dwell", "Grain Cars Loaded", "Grain Car Orders",
@@ -87,7 +88,7 @@ with map_col, st.container(border=True):
     if layer == "Terminal Dwell":
         geo = recent(data.terminal_dwell(), ["railroad", "terminal", "lat", "lon"], "dwell_hours", "mean", map_weeks)
         fig = charts.terminal_map(geo, layer, MAP_H)
-        note = "Red = slower than last year. Click a terminal to chart its dwell in the Service panel; double-click the map to clear."
+        note = "Click a terminal to render its Service vs. Own History panel below. Double-click the map to clear."
     elif layer == "Grain Cars Loaded":
         geo = recent(data.grain_by_state(), ["state"], "cars", "sum", map_weeks)
         fig = charts.state_map(geo, "cars", layer, "cars loaded", MAP_H)
@@ -109,7 +110,7 @@ with map_col, st.container(border=True):
     export[f"Map - {layer}"] = geo
     event = st.plotly_chart(fig, config=charts.export_config(f"rail_map_{layer}_{week.date()}"),
                             on_select="rerun", selection_mode="points", key=f"map_{layer}")
-    st.caption(f"Latest {map_window.lower()} through week ending {geo.attrs['through']} vs. the same weeks last year. {note}")
+    st.caption(note)
     points = event.selection.points if layer == "Terminal Dwell" and event else []
     selected_terminal = (points[0]["customdata"][0], points[0]["customdata"][1]) if points else None
 
@@ -124,8 +125,8 @@ with right_col:
         st.plotly_chart(charts.volume(weekly, metric, since, CHART_H),
                         config=charts.export_config(f"rail_volume_{by}_{week.date()}"))
         st.caption(("Weekly originated carloads." if metric == "Carloads" else
-                    "Each point: the latest 4 weeks' carloads vs. the same 4 weeks a year earlier.")
-                   + f" The range buttons only set how far back the chart goes. CPKC includes CP + KCS before the May 2025 merger.")
+                    "The latest 4 weeks' carloads vs. the same 4 weeks a year earlier.")
+                   + " CPKC includes CP and KCS before the May 2025 merger.")
         export[f"Volume by {by}"] = weekly
 
     with st.container(border=True):
@@ -139,8 +140,7 @@ with right_col:
         st.caption(
             f"Originated carloads, **latest {drivers_window.lower()}** (weeks ending {d['first']} to {d['through']}) "
             f"vs. **the same weeks a year earlier** ({d['first_ly']} to {d['through_ly']}): the network changed "
-            f"{d['network_change']:+,.0f} carloads ({d['network_yoy']:+.1f}%). Each bar is one {drivers_by.lower()}'s "
-            f"share of that change in percentage points, stepping from 0 to the network total.")
+            f"{d['network_change']:+,.0f} carloads ({d['network_yoy']:+.1f}%).")
         export[f"Drivers by {drivers_by}"] = contrib.reset_index(names=drivers_by)
 
 
@@ -183,7 +183,7 @@ with service_col, st.container(border=True):
         export[f"{label} YoY"] = yoy
 
 with share_col, st.container(border=True):
-    group_col, seg_col, com_col = panel_header("Market Share", 4.6, 1.5, 1.8, title_width=1.3)
+    group_col, seg_col, com_col = panel_header("Market Share (13-Week)", 4.2, 1.5, 1.7, title_width=2.1)
     group_name = toggle(group_col, list(data.SHARE_GROUPS), "share_group")
     segment = seg_col.selectbox("Segment", ["All Segments", *data.SEGMENTS], key="share_segment",
                                 label_visibility="collapsed")
@@ -197,16 +197,16 @@ with share_col, st.container(border=True):
     share = data.market_share(orig_all, group, segment, commodity)
     what = commodity or segment or "all commodities"
     if group:
-        y_title, reference = "Share of Pair, % (13-Week)", 50
+        y_title, reference = "Share of Pair, %", 50
         note = (f"{group[0]} and {group[1]} compete for the same customers; each line is its share of their "
                 f"combined originated carloads ({what}).")
     else:
-        y_title, reference = "Share of Network, % (13-Week)", None
+        y_title, reference = "Share of Network, %", None
         note = (f"Each railroad's share of all originated carloads ({what}). Reflects network size as much as "
                 "competition: railroads only win share from those serving the same region.")
     st.plotly_chart(charts.share(share, y_title, CHART_H, reference),
                     config=charts.export_config(f"rail_share_{group_name}_{week.date()}"))
-    st.caption(f"{note} 13-week rolling. Not affected by the railroad filter.")
+    st.caption(note)
     export[f"Share - {group_name}"] = share
 
 
@@ -256,8 +256,6 @@ with st.container(border=True):
     counts["QTD Last Year"] = st.column_config.NumberColumn(
         format="localized", help=f"The same weeks one year earlier: {q['first_ly']} to {q['through_ly']}.")
 
-    st.caption(f"Q{quarter.quarter} {quarter.year} to date: {q['weeks']} of 13 weeks ({q['first']} to {q['through']}) "
-               f"vs. the same weeks a year earlier. Terminals use the map's window ({map_window.lower()}).")
     tabs = st.tabs(["Quarter-to-Date Tracker", "Commodities", "Terminals"])
     with tabs[0]:
         st.dataframe(tracker, height=TABLE_H, hide_index=True, column_config={
