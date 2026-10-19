@@ -35,7 +35,7 @@ Full design notes: `docs/DESIGN.md`. Schema: `sql/schema.sql`. Pipeline: `rail/`
 7. **Refresh = re-pull the whole 5-year window and upsert (never delete).** Railroads restate past weeks. Backfill and refresh share one code path.
 8. **Drop `comparable_week_this_year`.** It is a USDA charting helper.
 9. **Never compare service levels across railroads.** Compare each railroad to its own history (YoY, vs trailing average, z-score).
-10. **Never sum or average `average`-type measures across railroads** (speed, dwell). `measure.agg_type` enforces this.
+10. **Never sum or average speed, dwell or shuttle turns across railroads.** They are per-railroad averages.
 
 ## Railroads
 Codes in data: BNSF, UP, NS, CSX, CN, CP, KCS, CPKC.
@@ -43,7 +43,7 @@ Codes in data: BNSF, UP, NS, CSX, CN, CP, KCS, CPKC.
 - CPKC first week: 2025-05-10 (carloads) / 2025-05-09 (service).
 - CN and CPKC report U.S. operations only.
 
-## CP + KCS → CPKC stitching (follows `measure.agg_type`; build in the analysis layer)
+## CP + KCS → CPKC stitching (build in the analysis layer)
 | Kind | Examples | Rule | Evidence at the switch |
 |---|---|---|---|
 | Flow | originated carloads, grain cars loaded, car orders | sum CP+KCS before, CPKC after | 15,841 → 16,315 |
@@ -67,4 +67,4 @@ Terminal dwell is keyed by cleaned terminal name, so yards shared by CP and CPKC
 ## Verified against a real Postgres 16 load (Oct 2026)
 - Profiling load: all 157,228 carload rows load against the keys with no conflicts; no duplicate service keys since 2021.
 - Carload week = submission − 4 days, service week = submission − 5 days.
-- Stitching views (CP+KCS → CPKC, driven by `measure.agg_type`) were dropped from schema.sql during the trim; rebuild them in the analysis layer.
+- Stitching views (CP+KCS → CPKC) were dropped from schema.sql during the trim; rebuild them in the analysis layer.

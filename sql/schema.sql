@@ -19,8 +19,7 @@ CREATE TABLE IF NOT EXISTS core.commodity (
 CREATE TABLE IF NOT EXISTS core.measure (
   measure     text PRIMARY KEY,            -- short key used in queries
   source_name text NOT NULL UNIQUE,        -- exact name in the service dataset
-  unit        text NOT NULL,
-  agg_type    text NOT NULL CHECK (agg_type IN ('flow', 'stock', 'average'))  -- average: never sum across railroads
+  unit        text NOT NULL
 );
 
 -- Published data ----------------------------------------------------------------
@@ -112,14 +111,14 @@ ON CONFLICT DO NOTHING;
 -- The service dataset's 'Weekly Carloads By 23 Commodity Categories' is not listed:
 -- it duplicates the carloads dataset and is used only for the reconciliation check.
 INSERT INTO core.measure VALUES
-  ('train_speed',         'Average Train Speed  (MPH)', 'mph', 'average'),  -- two spaces in source
-  ('terminal_dwell',      'Average Terminal Dwell Time (Excluding Cars on Run Through Trains) (Hours)', 'hours', 'average'),
-  ('origin_dwell',        'Average Dwell Time at Origin for Unit Train Shipments (Hours)', 'hours', 'average'),
-  ('cars_online',         'Cars On Line (Count)', 'cars', 'stock'),
-  ('cars_idle_48h',       'Weekly Average Number of Loaded and Empty Cars in Revenue Service That Have Not Moved 48 Hours Or Greater', 'cars', 'stock'),
-  ('trains_held',         'Weekly Average Number of Trains Holding Per Day by Train Type and Cause', 'trains/day', 'stock'),
-  ('grain_cars_loaded',   'Weekly total grain cars loaded and billed, reported by State and Type of Car Ordering System', 'cars/week', 'flow'),
-  ('grain_car_orders',    'Grain Car Order Fulfillment Metrics (Count)', 'cars', 'flow'),
-  ('grain_shuttle_turns', 'Average Grain Shuttle Turns per Month By Region', 'trips/month', 'average'),
-  ('coal_loadings',       'Coal Unit Train Loadings or Carloadings by Coal Production Region (Count)', 'trains or cars', 'flow')
+  ('train_speed',         'Average Train Speed  (MPH)', 'mph'),  -- two spaces in source
+  ('terminal_dwell',      'Average Terminal Dwell Time (Excluding Cars on Run Through Trains) (Hours)', 'hours'),
+  ('origin_dwell',        'Average Dwell Time at Origin for Unit Train Shipments (Hours)', 'hours'),
+  ('cars_online',         'Cars On Line (Count)', 'cars'),
+  ('cars_idle_48h',       'Weekly Average Number of Loaded and Empty Cars in Revenue Service That Have Not Moved 48 Hours Or Greater', 'cars'),
+  ('trains_held',         'Weekly Average Number of Trains Holding Per Day by Train Type and Cause', 'trains/day'),
+  ('grain_cars_loaded',   'Weekly total grain cars loaded and billed, reported by State and Type of Car Ordering System', 'cars/week'),
+  ('grain_car_orders',    'Grain Car Order Fulfillment Metrics (Count)', 'cars'),
+  ('grain_shuttle_turns', 'Average Grain Shuttle Turns per Month By Region', 'trips/month'),
+  ('coal_loadings',       'Coal Unit Train Loadings or Carloadings by Coal Production Region (Count)', 'trains or cars')
 ON CONFLICT DO NOTHING;

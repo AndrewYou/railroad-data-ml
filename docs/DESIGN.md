@@ -16,13 +16,13 @@ Both sources are already long (measure / variable / subvariable / value). Servic
 ## Refresh
 Every run re-fetches the whole window (Jan 1 five years ago onward) from the API and upserts. Nothing is deleted, so a truncated response can't wipe history; rows that vanish upstream are flagged instead. Changed values are logged to `ops.revision`. The first load and the weekly refresh are the same job.
 
-## Measure typing (`core.measure`)
-- `agg_type`:
-  - `flow`: counted per week, so it adds up.
-  - `stock`: a point-in-time count, so it adds up across railroads but not across weeks.
-  - `average`: never add.
-- Stitching CP+KCS into CPKC follows from `agg_type`: flows and stocks sum, averages break. (Received carloads also break; see CLAUDE.md.)
-- `unit`: the source has no unit column. Units come from the measure names and STB definitions.
+## Measures (`core.measure`)
+- Each measure has a short key (`train_speed`), the exact source name, and a `unit` (the source has none; units come from the measure names and STB definitions).
+- Kinds of measure, which decide how they combine:
+  - flows (carloads, grain cars loaded): counted per week, so they add up.
+  - stocks (cars online, cars idle 48h+): point-in-time counts; add across railroads, not across weeks.
+  - averages (speed, dwell, shuttle turns): never add.
+- Stitching CP+KCS into CPKC: flows and stocks sum, averages break. Received carloads also break; see CLAUDE.md.
 
 ## Analysis conventions
 - Volume = Originated only.
