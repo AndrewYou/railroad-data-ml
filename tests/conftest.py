@@ -16,7 +16,7 @@ ACTIVE = ("BNSF", "UP", "NS", "CSX", "CN", "CPKC")
 def conn():
     """A fresh schema per test."""
     with psycopg.connect(TEST_DATABASE_URL, autocommit=True) as c:
-        c.execute("DROP SCHEMA IF EXISTS core, ops CASCADE")
+        c.execute("DROP SCHEMA IF EXISTS core, ops, mart CASCADE")
     db.init(TEST_DATABASE_URL)
     with psycopg.connect(TEST_DATABASE_URL) as c:
         yield c

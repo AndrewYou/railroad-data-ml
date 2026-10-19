@@ -1,6 +1,6 @@
-# U.S. Rail Freight Data Pipeline
+# U.S. Rail Freight Monitor
 
-Loads two public USDA AgTransport datasets (weekly railroad filings to the Surface Transportation Board) into Postgres, keeps them current, and checks them before anything is published.
+Loads two public USDA AgTransport datasets (weekly railroad filings to the Surface Transportation Board) into Postgres, keeps them current, checks them before anything is published, and shows them on a one-screen dashboard for equity research.
 
 | Dataset | Socrata ID | Rows since 2021 |
 |---|---|---|
@@ -17,6 +17,7 @@ docker compose up -d --build
 
 | What | Where |
 |---|---|
+| **Dashboard** | http://localhost:8501 |
 | Pipeline logs | `docker compose logs -f worker` |
 | Database (pgAdmin) | http://localhost:5050, server **rail**, password `rail` |
 | Database (any client) | `postgresql://rail:rail@localhost:5432/rail` |
@@ -28,6 +29,24 @@ The worker loads five years of history on first start (usually ~5 minutes; up to
 docker compose run --rm worker python -m rail load     # load now
 docker compose run --rm worker python -m pytest -q     # run the tests
 ```
+
+## Dashboard
+
+One screen, filtered by railroad and quarter from the top bar:
+
+| Panel | Question it answers | Toggles |
+|---|---|---|
+| **Map** | Where is the network congested, and where is grain or coal moving vs last year? | Terminal dwell (click a terminal to chart it) · Grain by state · Coal by basin |
+| **What's moving** | Weekly originated carloads, this year vs last | Carloads / YoY % · Network / Segment / Railroad · 1Y / 2Y / 5Y |
+| **What's driving it** | Each commodity's, railroad's or segment's share of the network's YoY change, quarter to date | Commodity / Railroad / Segment |
+| **Service** | Is service improving? Each railroad vs its own history only | Speed / Dwell / Cars online · vs history / YoY % all |
+| **Market share** | UP vs BNSF in the West, CSX vs NS in the East | Pair · Segment · Commodity |
+| **Tables** | Quarter-to-date tracker with projection, commodities (with macro read-through), terminals, revisions to history | Sort by clicking a column; search from the table toolbar |
+
+- **Export.** *Excel* (top bar) downloads every table plus the data behind each chart, with an About sheet recording the data week, load time and filters, so saved snapshots are self-describing. Each chart's camera icon saves a 3x PNG for decks; each table's toolbar downloads CSV.
+- **Light / dark.** ⋮ menu → Settings → Theme. Charts follow the app theme.
+- **Conventions.** Volume is Originated carloads only. CPKC is one series across the 2025 merger (CP + KCS before it), and so are its terminals. YoY compares to the same weeks 52 weeks earlier. Service levels are never compared across railroads.
+- **Logic** lives in SQL views (`sql/views.sql`, schema `mart`), so an analyst in pgAdmin gets the same numbers as the dashboard.
 
 ## How it works
 
@@ -53,6 +72,7 @@ Each check answers: *would an analyst be misled by what we publish?* Code: [rail
 | `carloads_mismatch`: a railroad's weekly carloads differ between the two datasets | dataset | Flagged |
 | `removed_upstream`: a published row is no longer in the source | dataset | Kept and flagged |
 | `stale_data`: no new filing by Friday noon ET | dataset | Flagged and emailed once |
+| `unmapped_terminal`: a reported terminal has no map coordinates | dataset | Flagged; add it to `sql/terminals.sql` |
 
 A held row never overwrites a published one: the last good value stays until the source is fixed.
 
@@ -94,7 +114,13 @@ rail/
   checks.py     data checks
   pipeline.py   jobs: load both datasets with run tracking; hourly watcher
   alerts.py     email summary
+dashboard/
+  app.py        layout and toggles
+  data.py       queries and comparisons (YoY, quarter to date, drivers, share)
+  charts.py     Plotly figures, light and dark palettes
 sql/schema.sql  tables and reference data (railroads, commodities, measures)
+sql/terminals.sql  terminal coordinates for the map
+sql/views.sql   analysis views (mart schema)
 tests/          check and load behaviour against a real Postgres
 ```
 
@@ -105,4 +131,5 @@ python3.12 -m venv .venv && .venv/bin/pip install -r requirements.txt
 createdb rail_dev && createdb rail_test
 DATABASE_URL=postgresql:///rail_dev .venv/bin/python -m rail load
 TEST_DATABASE_URL=postgresql:///rail_test .venv/bin/python -m pytest -q
+DATABASE_URL=postgresql:///rail_dev PYTHONPATH=. .venv/bin/streamlit run dashboard/app.py
 ```

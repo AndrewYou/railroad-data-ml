@@ -24,6 +24,7 @@ def load(conn, ds: Dataset, rows: Iterable[dict], since: dt.date, run_id: int) -
     checks.flag_incomplete_latest_week(conn, ds, run_id)
     if ds is SERVICE:
         checks.flag_carloads_mismatch(conn, run_id)
+        checks.flag_unmapped_terminals(conn, run_id)
 
     return {"rows_fetched": rows_fetched, "rows_changed": rows_changed,
             "rows_held": rows_held, "revisions": revisions}

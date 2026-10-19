@@ -1,6 +1,7 @@
 -- Rail freight pipeline schema. Applied on every start; safe to re-run.
 --   core: published data the analysis reads (only rows that passed every row check)
 --   ops:  pipeline monitoring (job runs, issues, revisions to history)
+-- Reference seeds use ON CONFLICT DO UPDATE, so editing them here takes effect on restart.
 
 CREATE SCHEMA IF NOT EXISTS core;
 CREATE SCHEMA IF NOT EXISTS ops;
@@ -13,7 +14,17 @@ CREATE TABLE IF NOT EXISTS core.railroad (
 );
 
 CREATE TABLE IF NOT EXISTS core.commodity (
-  commodity text PRIMARY KEY
+  commodity    text PRIMARY KEY,
+  segment      text NOT NULL CHECK (segment IN ('Intermodal', 'Coal', 'Merchandise')),  -- as railroads report
+  read_through text NOT NULL               -- what the volume says about the wider economy
+);
+
+CREATE TABLE IF NOT EXISTS core.terminal (   -- coordinates for the map; seeded in terminals.sql
+  railroad text NOT NULL REFERENCES core.railroad,
+  terminal text NOT NULL,                     -- exact name in the terminal dwell measure
+  lat      numeric NOT NULL,
+  lon      numeric NOT NULL,
+  PRIMARY KEY (railroad, terminal)
 );
 
 CREATE TABLE IF NOT EXISTS core.measure (
@@ -96,17 +107,33 @@ INSERT INTO core.railroad VALUES
   ('CPKC', 'Canadian Pacific Kansas City (U.S. operations)', NULL),
   ('CP',   'Canadian Pacific (U.S. operations)', 'CPKC'),  -- last filed 2025-05-03
   ('KCS',  'Kansas City Southern', 'CPKC')                 -- last filed 2025-05-03
-ON CONFLICT DO NOTHING;
+ON CONFLICT (railroad) DO UPDATE SET name = EXCLUDED.name, merged_into = EXCLUDED.merged_into;
 
 INSERT INTO core.commodity VALUES
-  ('All Other'), ('Chemicals'), ('Coal'), ('Coke'), ('Containers'),
-  ('Crushed Stone, Sand and Gravel'), ('Farm Products except Grain'), ('Fertilizer'),
-  ('Food and Kindred Products'), ('Grain'), ('Grain Mill Products'), ('Iron and Steel Scrap'),
-  ('Lumber and Wood Products'), ('Metallic Ores'), ('Metals'), ('Motor Vehicles and Equipment'),
-  ('Non Metallic Minerals'), ('Petroleum Products'), ('Primary Forest Products'),
-  ('Pulp, Paper and Allied Products'), ('Stone, Clay and Glass Products'), ('Trailers'),
-  ('Waste and Scrap Materials')
-ON CONFLICT DO NOTHING;
+  ('Containers',                      'Intermodal',  'Consumer goods and imports'),
+  ('Trailers',                        'Intermodal',  'Consumer goods; competes with truck'),
+  ('Coal',                            'Coal',        'Power generation and coal exports'),
+  ('Grain',                           'Merchandise', 'Agricultural exports'),
+  ('Grain Mill Products',             'Merchandise', 'Food processing and ethanol'),
+  ('Farm Products except Grain',      'Merchandise', 'Agriculture'),
+  ('Food and Kindred Products',       'Merchandise', 'Consumer staples'),
+  ('Fertilizer',                      'Merchandise', 'Farm inputs ahead of planting'),
+  ('Chemicals',                       'Merchandise', 'Industrial production'),
+  ('Petroleum Products',              'Merchandise', 'Energy'),
+  ('Lumber and Wood Products',        'Merchandise', 'Housing construction'),
+  ('Primary Forest Products',         'Merchandise', 'Housing and paper'),
+  ('Pulp, Paper and Allied Products', 'Merchandise', 'Packaging demand'),
+  ('Motor Vehicles and Equipment',    'Merchandise', 'Auto production'),
+  ('Metals',                          'Merchandise', 'Manufacturing and steel'),
+  ('Iron and Steel Scrap',            'Merchandise', 'Steel production'),
+  ('Metallic Ores',                   'Merchandise', 'Steel and mining'),
+  ('Coke',                            'Merchandise', 'Steel production'),
+  ('Crushed Stone, Sand and Gravel',  'Merchandise', 'Construction and frac sand'),
+  ('Non Metallic Minerals',           'Merchandise', 'Construction and chemicals'),
+  ('Stone, Clay and Glass Products',  'Merchandise', 'Construction'),
+  ('Waste and Scrap Materials',       'Merchandise', 'Industrial activity'),
+  ('All Other',                       'Merchandise', 'Mixed')
+ON CONFLICT (commodity) DO UPDATE SET segment = EXCLUDED.segment, read_through = EXCLUDED.read_through;
 
 -- The service dataset's 'Weekly Carloads By 23 Commodity Categories' is not listed:
 -- it duplicates the carloads dataset and is used only for the reconciliation check.
@@ -121,4 +148,4 @@ INSERT INTO core.measure VALUES
   ('grain_car_orders',    'Grain Car Order Fulfillment Metrics (Count)', 'cars'),
   ('grain_shuttle_turns', 'Average Grain Shuttle Turns per Month By Region', 'trips/month'),
   ('coal_loadings',       'Coal Unit Train Loadings or Carloadings by Coal Production Region (Count)', 'trains or cars')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (measure) DO UPDATE SET source_name = EXCLUDED.source_name, unit = EXCLUDED.unit;

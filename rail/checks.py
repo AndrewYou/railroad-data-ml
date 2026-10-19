@@ -118,6 +118,23 @@ def flag_carloads_mismatch(conn, run_id: int) -> None:
         """, (SERVICE_CARLOADS_COPY, run_id))
 
 
+def flag_unmapped_terminals(conn, run_id: int) -> None:
+    """A terminal an active railroad reports has no map coordinates, so the map would silently omit it.
+
+    Fix by adding it to sql/terminals.sql.
+    """
+    conn.execute("""
+        INSERT INTO ops.issue (run_id, dataset, check_name, action, railroad, week_ending, detail)
+        SELECT DISTINCT %s, 'service', 'unmapped_terminal', 'flagged', c.railroad, c.week_ending,
+               'no coordinates for terminal: ' || c.variable
+        FROM clean c
+        JOIN core.railroad r ON r.railroad = c.railroad AND r.merged_into IS NULL
+        WHERE c.measure = 'terminal_dwell' AND c.variable <> 'System Average'
+          AND c.week_ending = (SELECT max(week_ending) FROM clean)
+          AND NOT EXISTS (SELECT 1 FROM core.terminal t WHERE t.railroad = c.railroad AND t.terminal = c.variable)
+        """, (run_id,))
+
+
 # Freshness (runs from the watcher, outside any load) ------------------------------------
 
 def expected_submission(now: dt.datetime) -> dt.date:

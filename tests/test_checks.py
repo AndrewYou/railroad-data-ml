@@ -103,3 +103,12 @@ def test_late_filing_is_flagged_once(conn):
     second = flag_stale_data(conn, at("2026-10-16", 14))
     assert first == ["carloads: no filing for 2026-10-14 (latest loaded: 2026-10-07)"]
     assert second == []
+
+
+def test_terminal_without_map_coordinates_is_flagged(conn):
+    dwell = "Average Terminal Dwell Time (Excluding Cars on Run Through Trains) (Hours)"
+    run(conn, SERVICE, full_service_week() + [
+        service("UP", dwell, "Roseville, CA", 22.0),       # has coordinates
+        service("UP", dwell, "New Yard, TX", 30.0)])       # doesn't
+    assert issues(conn, "unmapped_terminal") == [
+        ("flagged", "UP", "2026-10-09", "no coordinates for terminal: New Yard, TX")]
