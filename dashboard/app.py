@@ -49,7 +49,7 @@ status = data.status()
 week = pd.Timestamp(status["carloads_week"])
 
 title, rr_col, export_col, status_col = st.columns([2.8, 3.2, 0.8, 3.4], vertical_alignment="center")
-title.markdown("<div style='font-size:1.6rem;font-weight:700;line-height:1.2;margin-bottom:1rem'>Daniel Plainview's Dashboard</div>",
+title.markdown("<div style='font-size:1.6rem;font-weight:700;line-height:1.2;margin-bottom:1rem'>🛢️ Daniel Plainview's Dashboard</div>",
                unsafe_allow_html=True)  # plain line: a heading's extra spacing would sit lower than the controls
 all_railroads = data.active_railroads()
 railroads = rr_col.multiselect("Railroads", all_railroads, default=all_railroads, label_visibility="collapsed",
