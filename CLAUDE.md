@@ -2,7 +2,7 @@
 
 Case study: ingest two public USDA AgTransport rail datasets (sourced from STB EP 724 weekly filings) into Postgres, keep them refreshed weekly, and build analysis on top. Requirements: free/no API keys, reproducible from a fresh clone, 5+ years of history.
 
-Full design notes: `docs/DESIGN.md`. Schema: `sql/schema.sql`. Pipeline: `rail/` (see README).
+Write-up (approach, checks, decisions): `docs/WRITEUP.html` / `.pdf`. Schema: `sql/schema.sql`. Pipeline: `rail/`. Developer setup: README.
 
 ## Pipeline decisions (agreed with the user)
 - Code style: clean, simple, concise. Reviewers have 1-2 hours. No frameworks beyond psycopg + requests.
@@ -15,7 +15,7 @@ Full design notes: `docs/DESIGN.md`. Schema: `sql/schema.sql`. Pipeline: `rail/`
 - Dashboard ("Daniel Plainview's Dashboard", Streamlit + Plotly, `dashboard/`): one screen: US map (terminal dwell / grain by state / coal by basin), volume, drivers, service vs own history, market share, tables. Excel/PNG/CSV export. Light+dark themes via Streamlit settings; charts read `st.context.theme`. Logic in `sql/views.sql` (`mart`).
 - Both worker and dashboard containers run `db.init()` on start (advisory lock serializes them), so `mart` views always match the deployed code. Rebuild with `docker compose up -d --build` (all services).
 - Coal loadings units differ by railroad (CSX carloads, others unit trains): never sum across railroads.
-- Quarter nowcast (`nowcast/`, plan in `docs/NOWCAST_PLAN.md`): pandas + scikit-learn live only there, never in `rail/`. The worker runs `python -m nowcast` as a subprocess after a successful load; failures email but never fail the load. Results in schema `ml`. Model predicts a *correction* to the 13-week run-rate (the from-scratch version lost to the baseline). Winner = lower backtest error; currently the baseline (on 5 years it was 1.75% vs 2.09%; on 2017+ history, 2.35% vs 2.48% over 30 quarters). Don't keep tuning on the same backtest.
+- Quarter nowcast (`nowcast/`, explained on the Carload Projection page): pandas + scikit-learn live only there, never in `rail/`. The worker runs `python -m nowcast` as a subprocess after a successful load; failures email but never fail the load. Results in schema `ml`. Model predicts a *correction* to the 13-week run-rate (the from-scratch version lost to the baseline). Winner = lower backtest error; currently the baseline (on 5 years it was 1.75% vs 2.09%; on 2017+ history, 2.35% vs 2.48% over 30 quarters). Don't keep tuning on the same backtest.
 - Nowcast notes/experiments live on the dashboard's Nowcast page (`dashboard/nowcast_notes.md`), not in the write-up. The write-up covers: Approach, Challenges, Assumptions, How an analyst uses it, Self-assessment.
 - Dashboard entry point is `dashboard/main.py` (`st.navigation`: Equity Research = `app.py`, Nowcast = `nowcast_page.py`; don't name a page `nowcast.py`, it shadows the package).
 - Skipped for now (note in write-up as future work): volume-swing bounds, share-of-network bounds, service value range checks. No composite "service scorecard" (user: too black-box for investors).
