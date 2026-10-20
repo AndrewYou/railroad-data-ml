@@ -119,10 +119,22 @@
 <ul>
   <li><b>Ingestion.</b> The worker pulls both datasets from the public USDA API. The first load backfills all history, from the first filing (March 25, 2017). Every refresh re-fetches January 1, 2021 onward (five full years; the start moves up each January) and inserts or updates rows without deleting any, so corrections to recent weeks are picked up and older weeks are kept.</li>
   <li><b>Scheduling.</b> Every hour the worker reads each dataset's public metadata, which includes <code>rowsUpdatedAt</code>, the time USDA last changed its rows. It loads only if that is newer than the timestamp saved with the last successful load, and loads anyway if nothing has succeeded in 7 days.</li>
-  <li><b>Data checks.</b> Seven checks guard each load. A failing row, such as an unknown railroad code, is not published: it is saved with its reason and original data in an issues table, listed in the run's email, and the last good value stays. Once fixed, it publishes on the next load. Problems with a whole dataset, such as a missing railroad, are flagged and emailed.</li>
-  <li><b>Dashboard.</b> One screen answers the brief's three questions: what is moving, what is driving the change, and whether service is improving.</li>
+  <li><b>Data checks.</b> Seven checks guard each load (table below). <b>Held</b> means the row is not published: it is saved with its reason and original data in an issues table, the last good value stays, and it publishes on the next load once fixed. <b>Flagged</b> means the data is published and an issue is recorded for review. Every load emails one summary: run status, held rows, flagged issues and corrected past values by railroad.</li>
+  <li><b>Dashboard.</b> One screen answers the brief's three questions: what is moving, what is driving the change, and whether service is improving. One trailing window (the latest 1, 2 or 4 weeks vs. the same weeks a year earlier) drives every year-over-year view. Excel exports every table and the data behind each chart, stamped with the data week and filters; charts save as PNG and tables as CSV.</li>
   <li><b>Machine learning.</b> A separate page projects each railroad's quarterly carloads and tests whether a gradient boosting model, trained only on earlier quarters, beats a 13-week run-rate: carloads reported so far, plus the rest of the quarter at last year's level grown by the latest 13 weeks' year-over-year change. Trained on history from 2017, the run-rate still won (2.35% vs. 2.48% mean error over 30 quarters), so the page uses it.</li>
 </ul>
+
+<table>
+  <tr><th style="width:38%">What can go wrong</th><th>What happens</th></tr>
+  <tr><td>Unknown railroad, commodity or measure (a merged railroad files as <code>UPNS</code>)</td><td>Those rows held; everything else publishes; listed in every email until mapped.</td></tr>
+  <tr><td>Duplicate rows in the source</td><td>Both rows held.</td></tr>
+  <tr><td>A railroad, commodity or headline service metric missing from the latest week</td><td>Flagged; that week shows as missing, not zero.</td></tr>
+  <tr><td>Weekly carloads differ between the two datasets</td><td>Flagged; the carloads dataset is published.</td></tr>
+  <tr><td>A published row disappears from the source</td><td>Kept and flagged.</td></tr>
+  <tr><td>A new terminal has no map coordinates</td><td>Flagged.</td></tr>
+  <tr><td>No new filing by Friday noon ET</td><td>Flagged; one alert email.</td></tr>
+  <tr><td>USDA API down, or a value that can't be read</td><td>Requests retry 5 times. If the load still fails, it is undone, published data is unchanged, and the email reports the failure. The worker retries hourly.</td></tr>
+</table>
 
 <h2>2. Challenges</h2>
 <table>
