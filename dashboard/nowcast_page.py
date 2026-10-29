@@ -16,16 +16,21 @@ SHORT = {"baseline": "Baseline", "model": "Model v2"}
 NOTES = Path(__file__).with_name("nowcast_notes.md")
 
 # Recorded during development (Oct 19, 2026): mean error on the same 15 test quarters, 2023 Q1 - 2026 Q3.
-EXPERIMENTS = pd.DataFrame({"error": [1.75, 2.13, 2.09, 1.93]}, index=[
-    "Baseline: 13-week run-rate (no ML)",
+# Baseline v2 recorded Oct 29, 2026.
+EXPERIMENTS = pd.DataFrame({"error": [1.75, 2.13, 2.09, 1.93, 1.62, 1.80]}, index=[
+    "Baseline v1: 13-week run-rate, last year's shape",
     "Model v1: gradient boosting, predicts growth",
     "Model v2: gradient boosting, corrects baseline",
-    "Model v2, history from 2017 (in production)"])
-LONGER_HISTORY = pd.DataFrame({  # the 2017+ experiment, 30 test quarters (2019 Q2 - 2026 Q3)
+    "Model v2, history from 2017",
+    "Baseline v2: 3-year seasonal shape, COVID skipped (in use)",
+    "Model v2 on Baseline v2"])
+LONGER_HISTORY = pd.DataFrame({  # history from 2017, 30 test quarters (2019 Q2 - 2026 Q3)
     "Test period": ["All 30 quarters", "Excluding COVID (2020 - mid-2021)", "2020 only",
                     "0 weeks reported (all 30 quarters)"],
-    "Baseline": ["2.35%", "1.94%", "4.30%", "4.82%"],
-    "Model v2": ["2.48%", "2.07%", "4.10%", "4.52%"]})
+    "Baseline v1": ["2.35%", "1.94%", "4.30%", "4.82%"],
+    "Model v2 on v1": ["2.48%", "2.07%", "4.10%", "4.52%"],
+    "Baseline v2": ["1.92%", "1.60%", "4.10%", "3.85%"],
+    "Model v2 on v2": ["2.13%", "1.80%", "3.95%", "3.97%"]})
 
 
 def panel_title(text: str) -> None:
@@ -100,16 +105,17 @@ with st.container(border=True):
     panel_title("How It's Calculated: Baseline vs. Model")
     baseline_col, model_col, feature_col = st.columns([1, 1, 1.15])
     with baseline_col, st.container(border=True):
-        st.markdown("**Baseline: 13-Week Run-Rate (No ML)**")
-        st.latex(r"\text{Projection} = \text{Reported} + g_{\text{base}} \times \text{Remaining}_{\text{LY}}")
-        st.latex(r"g_{\text{base}} = \frac{\text{last 13 weeks}}{\text{same 13 weeks a year earlier}}")
-        st.markdown("*Reported* = carloads in the weeks already reported. *Remaining (LY)* = the same remaining "
-                    "weeks last year. The analyst's shortcut: the rest of the quarter grows like the last 13 weeks "
-                    "did. No training needed.")
+        st.markdown("**Baseline: Seasonal Run-Rate (No ML)**")
+        st.latex(r"\text{Projection} = \text{Reported} + \text{Expected}")
+        st.latex(r"\text{Expected} = \operatorname{median}_{y}\Big(\text{Remaining}_{y} \times "
+                 r"\frac{\text{last 13 weeks}}{\text{same 13 weeks } y \text{ years earlier}}\Big)")
+        st.markdown("*Reported* = carloads in the weeks already reported. *Remaining (y)* = the same remaining "
+                    "weeks *y* years earlier, for up to 3 earlier years, skipping any that touch the 2020 COVID "
+                    "collapse. The rest of the quarter runs at this year's level in the usual seasonal shape, "
+                    "and the median keeps one unusual year from setting that shape. No training needed.")
     with model_col, st.container(border=True):
         st.markdown("**Model v2: Gradient Boosting, Correcting the Baseline**")
-        st.latex(r"\text{Projection} = \text{Reported} + g_{\text{model}} \times \text{Remaining}_{\text{LY}}")
-        st.latex(r"g_{\text{model}} = g_{\text{base}} \times e^{\,\hat{c}}")
+        st.latex(r"\text{Projection} = \text{Reported} + e^{\,\hat{c}} \times \text{Expected}")
         st.markdown("*ĉ* is a correction predicted by **gradient boosting**: many small decision trees, each "
                     "fixing the errors of the ones before, learned from the features on the right. It starts from "
                     "the baseline, so with weak evidence it stays close to it. It replaced Model v1, gradient "
@@ -178,6 +184,6 @@ with st.container(border=True):
     with chart_col:
         st.plotly_chart(charts.experiment_bars(EXPERIMENTS, 200), config=charts.export_config("nowcast_experiments"))
     with table_col:
-        st.markdown("**Model v2 vs. Baseline across Different Time Periods**")
+        st.markdown("**Baselines and Model v2 across Different Time Periods**")
         st.dataframe(LONGER_HISTORY, hide_index=True)
     st.markdown(NOTES.read_text())

@@ -11,6 +11,8 @@ from rail import db
 
 YEAR = pd.Timedelta(days=364)  # 52 weeks: same weekday, so each week has its own prior-year match
 MAX_CHECKPOINT = 12
+TEMPLATE_YEARS, MAX_LOOKBACK = 3, 5  # the seasonal template: up to 3 usable years, looking back at most 5
+COVID = (pd.Timestamp("2020-03-22"), pd.Timestamp("2020-08-31"))  # weeks ending in the 2020 collapse and recovery
 SEGMENTS = ("Intermodal", "Coal", "Merchandise")
 SERVICE = {"train_speed": "speed", "terminal_dwell": "dwell", "cars_online": "cars_online"}
 
@@ -56,6 +58,32 @@ def is_holiday_week(week_ending: pd.DatetimeIndex) -> np.ndarray:
         holidays = [pd.Timestamp(start.year, 12, 25), pd.Timestamp(end.year, 1, 1)]
         return any(start <= h <= end for h in holidays)
     return np.array([contains_holiday(w) for w in week_ending])
+
+
+def expected_remaining(total: pd.Series, remaining: pd.DatetimeIndex, as_of: pd.Timestamp) -> float:
+    """The rest of the quarter at this year's level, shaped like the same weeks in earlier years.
+
+    Year y back contributes its remaining weeks × (trailing 13 weeks now / the same 13 weeks y years earlier).
+    With last year alone this is the plain 13-week run-rate; the median of up to 3 years keeps one unusual
+    year (a strike, a hurricane) from setting the shape. Years whose weeks touch the COVID collapse are skipped.
+    """
+    trailing = pd.date_range(end=as_of, periods=13, freq="7D")
+    now = total.reindex(trailing).sum(min_count=13)
+    estimates = []
+    for y in range(1, MAX_LOOKBACK + 1):
+        then_remaining, then_trailing = remaining - y * YEAR, trailing - y * YEAR
+        weeks = then_remaining.append(then_trailing)
+        if ((weeks >= COVID[0]) & (weeks <= COVID[1])).any():
+            continue
+        level = total.reindex(then_trailing).sum(min_count=13)
+        if not level > 0:  # also skips NaN: that year isn't in the data
+            continue
+        estimate = total.reindex(then_remaining).sum(min_count=len(then_remaining)) * now / level
+        if not np.isnan(estimate):
+            estimates.append(estimate)
+        if len(estimates) == TEMPLATE_YEARS:
+            break
+    return float(np.median(estimates)) if estimates else np.nan
 
 
 # Weekly series -------------------------------------------------------------------------
@@ -128,11 +156,13 @@ def checkpoints(weekly_rows: pd.DataFrame) -> pd.DataFrame:
                 # Last year's weeks are looked up directly: this year's remaining weeks may not exist yet.
                 ly_observed = w["total"].reindex(done - YEAR).sum(min_count=k) if k else 0.0
                 ly_remaining = w["total"].reindex(remaining - YEAR).sum(min_count=len(remaining))
+                expected = expected_remaining(w["total"], remaining, as_of)
                 actual = w.loc[weeks, "total"].sum() if complete else np.nan
                 rows.append({
                     "railroad": railroad, "quarter": quarter, "checkpoint": k, "as_of": as_of,
                     "observed": observed, "ly_observed": ly_observed, "ly_remaining": ly_remaining,
                     "actual": actual, "target": growth(actual - observed, ly_remaining),
+                    "base_growth": growth(expected, ly_remaining),  # the baseline's g: expected vs. last year
                     "qtd_yoy": growth(observed, ly_observed) if k else np.nan,
                     "weeks_remaining": len(remaining),
                     "quarter_of_year": quarter.quarter,

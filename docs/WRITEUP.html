@@ -121,7 +121,7 @@
   <li><b>Scheduling.</b> Every hour the worker reads each dataset's public metadata, which includes <code>rowsUpdatedAt</code>, the time USDA last changed its rows. It loads only if that is newer than the timestamp saved with the last successful load, and loads anyway if nothing has succeeded in 7 days.</li>
   <li><b>Data checks.</b> Seven checks guard each load (table below). <b>Held</b> means the row is not published: it is saved with its reason and original data in an issues table, the last good value stays. Nothing is queued: every load re-fetches the source and re-runs the checks, so the row publishes as soon as the cause is fixed, for example by adding a new railroad code to the reference data. <b>Flagged</b> means the data is published and an issue is recorded for review. Every load emails one summary: run status, held rows, flagged issues and corrected past values by railroad.</li>
   <li><b>Dashboard.</b> One screen answers the brief's three questions: what is moving, what is driving the change, and whether service is improving. One trailing window (the latest 1, 2 or 4 weeks vs. the same weeks a year earlier) drives every year-over-year view. Excel exports every table and the data behind each chart, stamped with the data week and filters; charts save as PNG and tables as CSV.</li>
-  <li><b>Machine learning.</b> A separate page projects each railroad's quarterly carloads and tests whether a gradient boosting model, trained only on earlier quarters, beats a 13-week run-rate: carloads reported so far, plus the rest of the quarter at last year's level grown by the latest 13 weeks' year-over-year change. Trained on history from 2017, the run-rate still won (2.35% vs. 2.48% mean error over 30 quarters), so the page uses it.</li>
+  <li><b>Machine learning.</b> A separate page projects each railroad's quarterly carloads and tests whether a gradient boosting model, trained only on earlier quarters, beats a seasonal run-rate: carloads reported so far, plus the rest of the quarter at this year's level (the latest 13 weeks vs. the same weeks before), shaped like the median of the same weeks in up to 3 earlier years, skipping the 2020 COVID collapse. Using several years instead of last year alone cut the run-rate's error from 2.35% to 1.92% over 30 quarters, and it still beat the model (2.13%), so the page uses it.</li>
 </ul>
 
 <table>
@@ -204,7 +204,7 @@
 <h4>Business</h4>
 <ul>
   <li><b>Volume is not revenue.</b> The system has no link to pricing or reported financials.</li>
-  <li><b>The model did not beat the run-rate.</b> Projecting each railroad's quarterly originated carloads, its average error was higher in both backtests (2.09% vs. 1.75%, 15 quarters; 2.48% vs. 2.35%, 30). It helped mainly in shocks such as 2020.</li>
+  <li><b>The model did not beat the run-rate.</b> Projecting each railroad's quarterly originated carloads, its average error was higher in every backtest (latest: 2.13% vs. 1.92%, 30 quarters). It helped mainly in shocks such as 2020. The bigger gain came from a better seasonal baseline, not from machine learning.</li>
 </ul>
 </div>
 </div>

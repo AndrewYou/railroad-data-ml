@@ -2,11 +2,14 @@
 
     projection = carloads already reported this quarter + g × the same remaining weeks last year
 
+The baseline is a seasonal run-rate: the remaining weeks at this year's level, shaped like the median
+of up to 3 earlier years with COVID skipped (features.expected_remaining). It replaced the 1-year
+run-rate, which carried last year's shocks into this year (2.35% -> 1.92% over 30 backtest quarters).
+
 The model predicts a *correction* to the baseline's growth, not the growth itself. Why: the
-13-week run-rate is already very good (1.75% average error), and the first version, which learned
-growth from scratch, did worse (2.13%) because a few years of quarters is too little to relearn what
-the run-rate already knows. Predicting the correction starts the model at the baseline, so with weak
-evidence it stays close to the run-rate instead of drifting away from it.
+run-rate is already very good, and the first version, which learned growth from scratch, did worse
+because a few years of quarters is too little to relearn what the run-rate already knows. Predicting
+the correction starts the model at the baseline, so with weak evidence it stays close to it.
 """
 import numpy as np
 import pandas as pd
@@ -15,7 +18,7 @@ from sklearn.ensemble import HistGradientBoostingRegressor
 RAILROADS = ("BNSF", "UP", "NS", "CSX", "CN", "CPKC")
 FEATURES = {  # name -> what it tells the model
     "yoy_4w": "YoY growth, trailing 4 weeks (recent momentum)",
-    "yoy_13w": "YoY growth, trailing 13 weeks (the baseline's own signal)",
+    "yoy_13w": "YoY growth, trailing 13 weeks",
     "qtd_yoy": "YoY growth, quarter to date",
     "weeks_remaining": "Weeks left in the quarter",
     "quarter_of_year": "Quarter of the year (seasonality)",
@@ -36,8 +39,8 @@ def project(observed, ly_remaining, g):
 
 
 def baseline_growth(rows: pd.DataFrame) -> pd.Series:
-    """The analyst's run-rate: assume the rest of the quarter grows like the trailing 13 weeks."""
-    return np.exp(rows["yoy_13w"])
+    """The seasonal run-rate: the rest of the quarter at this year's level, in earlier years' seasonal shape."""
+    return np.exp(rows["base_growth"])
 
 
 def inputs(rows: pd.DataFrame) -> pd.DataFrame:
@@ -47,7 +50,7 @@ def inputs(rows: pd.DataFrame) -> pd.DataFrame:
 
 def correction(rows: pd.DataFrame) -> pd.Series:
     """What the model learns: actual remaining-weeks growth minus the baseline's, both as log ratios."""
-    return rows["target"] - rows["yoy_13w"]
+    return rows["target"] - rows["base_growth"]
 
 
 def fit(rows: pd.DataFrame) -> HistGradientBoostingRegressor:
@@ -63,4 +66,4 @@ def fit(rows: pd.DataFrame) -> HistGradientBoostingRegressor:
 
 def model_growth(model: HistGradientBoostingRegressor, rows: pd.DataFrame) -> pd.Series:
     """The baseline's growth, adjusted by the model's predicted correction."""
-    return pd.Series(np.exp(rows["yoy_13w"] + model.predict(inputs(rows))), index=rows.index)
+    return pd.Series(np.exp(rows["base_growth"] + model.predict(inputs(rows))), index=rows.index)

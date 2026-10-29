@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from nowcast.backtest import MIN_TRAIN_QUARTERS, usable, walk_forward
-from nowcast.features import checkpoints, quarter_of, quarter_weeks, weekly
+from nowcast.features import COVID, checkpoints, expected_remaining, quarter_of, quarter_weeks, weekly
 from nowcast.model import FEATURES, baseline_growth, project
 
 SATURDAYS = pd.date_range("2023-01-07", "2026-10-10", freq="W-SAT")
@@ -47,10 +47,30 @@ def test_baseline_projection_matches_hand_calculation():
     r = row(checkpoints(weekly(carloads, service)), "UP", "2026Q2", 4)
 
     g = baseline_growth(pd.DataFrame([r])).iloc[0]
-    assert g == pytest.approx(1.2)  # trailing 13 weeks: 13 × 120 / 13 × 100
+    assert g == pytest.approx(1.2)  # trailing 13 weeks: 13 × 120 / 13 × 100, and every earlier year agrees
     # 4 weeks done at 120 = 480; 9 weeks left, 100 each last year = 900; 480 + 1.2 × 900 = 1,560
     assert project(r["observed"], r["ly_remaining"], g) == pytest.approx(1560)
     assert r["actual"] == pytest.approx(1560)
+
+
+def test_one_unusual_year_does_not_set_the_seasonal_shape():
+    # Flat 100 a week, except the back of 2025 Q2 collapsed to 50 (a strike, say). 2026 is back to normal.
+    weeks_2025q2 = quarter_weeks(pd.Period("2025Q2"))
+    carloads, service = synthetic(lambda w: 50.0 if w in weeks_2025q2[4:] else 100.0, railroads=("UP",))
+    r = row(checkpoints(weekly(carloads, service)), "UP", "2026Q2", 4)
+
+    # Last year alone says the 9 remaining weeks bring 450; 2024 and 2023 say 900, and the median wins.
+    assert r["ly_remaining"] == pytest.approx(450)
+    assert project(r["observed"], r["ly_remaining"], baseline_growth(pd.DataFrame([r])).iloc[0]) == pytest.approx(1300)
+    assert r["actual"] == pytest.approx(1300)
+
+
+def test_covid_weeks_are_skipped_not_just_outvoted():
+    # Only 2019-2021 exist: for 2021 Q2 the years back are 2020 (COVID) and 2019. Averaging them would give ~55.
+    weeks = pd.date_range("2019-01-05", "2021-07-03", freq="W-SAT")
+    total = pd.Series([10.0 if COVID[0] <= w <= COVID[1] else 100.0 for w in weeks], index=weeks)
+    remaining = quarter_weeks(pd.Period("2021Q2"))
+    assert expected_remaining(total, remaining, remaining[0] - pd.Timedelta(weeks=1)) == pytest.approx(100 * len(remaining))
 
 
 # No look-ahead -------------------------------------------------------------------------

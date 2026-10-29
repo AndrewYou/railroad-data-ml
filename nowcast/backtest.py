@@ -12,7 +12,7 @@ MIN_TRAIN_QUARTERS = 4
 
 def usable(rows: pd.DataFrame) -> pd.DataFrame:
     """Complete quarters where both methods can project (the baseline needs a year of history)."""
-    return rows.dropna(subset=["target", "yoy_13w"])
+    return rows.dropna(subset=["target", "base_growth"])
 
 
 def walk_forward(rows: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:

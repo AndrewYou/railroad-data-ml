@@ -13,7 +13,7 @@ log = logging.getLogger("nowcast")
 
 def live_projections(rows: pd.DataFrame, results: pd.DataFrame) -> pd.DataFrame:
     """This quarter's projection from both methods, ± the backtest's mean error at the same checkpoint."""
-    live = rows[rows["actual"].isna()].dropna(subset=["yoy_13w", "ly_remaining"])
+    live = rows[rows["actual"].isna()].dropna(subset=["base_growth"])
     live = live.loc[live.groupby("railroad")["checkpoint"].idxmax()]  # the latest week each railroad has
     typical = backtest.errors(results).groupby("checkpoint")[["baseline", "model"]].mean() / 100
     model = fit(backtest.usable(rows))  # trained on every complete quarter

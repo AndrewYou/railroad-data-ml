@@ -75,7 +75,7 @@ rail/
   alerts.py     email summary
 nowcast/
   features.py   checkpoint rows: what was known at week k of a quarter, and the outcome
-  model.py      baseline run-rate, gradient boosting correction, the projection formula
+  model.py      seasonal baseline, gradient boosting correction, the projection formula
   backtest.py   walk-forward backtest, error metrics, permutation importance
   __main__.py   python -m nowcast: backtest + live projection, written to schema ml
 dashboard/

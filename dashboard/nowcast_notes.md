@@ -1,4 +1,5 @@
 - **The baseline run-rate is hard to beat.**
 - **Correcting the baseline beat predicting growth directly** (Model v2 2.09% vs. v1 2.13%), and more history helped further (1.93%). Neither beat the baseline, so it stays in use.
+- **A multi-year seasonal shape beat last year alone** (Baseline v2, 1.92% vs. 2.35% over 30 quarters; 1.58% vs. 1.65% on 2024+). Using only last year carried its shocks into this year: projections in 2021 used 2020 as their template. Taking the median of up to 3 earlier years, and skipping COVID weeks, fixed the worst quarters (2021 Q3: 7.3% to 1.8%). Tested once, with the pass rule set before the run.
 - **The model helps in shocks**, and terminal dwell became useful once the 2021–22 service crisis was in the training data.
-- **Limits:** ~30 test quarters is still a small sample. Results recorded Oct 19, 2026.
+- **Limits:** ~30 test quarters is still a small sample. Results recorded Oct 19 and Oct 29, 2026.
