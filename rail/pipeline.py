@@ -59,18 +59,29 @@ def run_nowcast() -> None:
 
 
 def watch() -> None:
-    """Every hour: load if USDA has published new data, and alert if a weekly filing is late."""
+    """Every hour: one refresh cycle."""
     while True:
         try:
-            if load_is_due():
-                load_all(None if has_loaded() else HISTORY_START)  # the first load backfills full history
-            with db.connect() as conn:
-                late = checks.flag_stale_data(conn, dt.datetime.now(dt.timezone.utc))
-            if late:
-                alerts.send("Weekly rail data is late", "\n".join(late))
+            refresh()
         except Exception:
             log.exception("watch cycle failed; retrying next cycle")
         time.sleep(CHECK_EVERY.total_seconds())
+
+
+def refresh() -> None:
+    """Load if USDA has published new data, and alert if a weekly filing is late.
+    One cycle of the watcher; the hosted deployment runs this on a schedule instead."""
+    run_ids = []
+    if load_is_due():
+        run_ids = load_all(None if has_loaded() else HISTORY_START)  # the first load backfills full history
+    with db.connect() as conn:
+        late = checks.flag_stale_data(conn, dt.datetime.now(dt.timezone.utc))
+        failed = conn.execute("SELECT count(*) FROM ops.job_run WHERE run_id = ANY(%s) AND status <> 'succeeded'",
+                              (run_ids,)).fetchone()[0]
+    if late:
+        alerts.send("Weekly rail data is late", "\n".join(late))
+    if failed:  # the summary has gone out; raising also fails a scheduled job, so its runner notifies
+        raise RuntimeError(f"{failed} dataset load(s) failed")
 
 
 def has_loaded() -> bool:

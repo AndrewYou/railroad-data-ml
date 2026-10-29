@@ -1,4 +1,5 @@
-"""Email alerts. Locally they land in Mailpit (http://localhost:8025). Without SMTP_HOST they only go to the log."""
+"""Email alerts. Locally they land in Mailpit (http://localhost:8025). Without SMTP_HOST they only go to the log
+(and, in GitHub Actions, the run summary)."""
 import logging
 import os
 import smtplib
@@ -11,6 +12,9 @@ MAX_LINES = 20
 
 def send(subject: str, body: str) -> None:
     log.info("%s\n%s", subject, body)
+    if summary := os.environ.get("GITHUB_STEP_SUMMARY"):  # in GitHub Actions: show on the run's page too
+        with open(summary, "a") as f:
+            f.write(f"### {subject}\n```\n{body}\n```\n")
     host = os.environ.get("SMTP_HOST")
     if not host:
         return

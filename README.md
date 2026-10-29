@@ -46,6 +46,23 @@ SELECT * FROM ops.revision ORDER BY revision_id DESC;              -- restated h
 
 Nowcast results are in schema `ml` (`ml.run`, `ml.backtest`, `ml.projection`). After each load the worker emails a summary (runs, issues, revisions) to Mailpit. To send real email, point `SMTP_HOST`, `SMTP_PORT` and `ALERT_TO` at a mail server.
 
+## Free hosted deployment
+
+The same code runs on free tiers, with no Docker:
+
+| Local | Hosted |
+|---|---|
+| `db` | [Neon](https://neon.tech) Postgres (free: 0.5 GB; the full load is ~265 MB) |
+| `worker` (hourly watch) | GitHub Actions, `.github/workflows/refresh.yml`: `python -m rail refresh` every 4 hours |
+| `dashboard` | [Streamlit Community Cloud](https://share.streamlit.io), `dashboard/main.py` |
+| Mailpit | the Actions run summary; a failed load fails the job and GitHub emails you |
+
+1. **Neon:** create a project (Postgres 16) and copy its connection string (`postgresql://…?sslmode=require`).
+2. **GitHub:** add it as repo secret `DATABASE_URL` (Settings → Secrets and variables → Actions). Then Actions → refresh → Run workflow. The first run creates the schema and backfills from 2017 (~5–10 minutes).
+3. **Streamlit Cloud:** New app → this repo, branch `main`, file `dashboard/main.py`. Under Advanced settings pick Python 3.12 and paste `DATABASE_URL = "postgresql://…"` into Secrets.
+
+Both services sleep when idle, so the first visit takes a few seconds to wake. GitHub pauses scheduled workflows in public repos after 60 days without commits; re-enable it from the Actions tab.
+
 ## Project layout
 
 ```
@@ -54,7 +71,7 @@ rail/
   datasets.py   the two datasets: source fields, keys, and the SQL that cleans a source row
   load.py       stage -> hold -> record revisions -> publish
   checks.py     data checks
-  pipeline.py   jobs: load both datasets with run tracking; hourly watcher
+  pipeline.py   jobs: load both datasets with run tracking; refresh (one check) and hourly watcher
   alerts.py     email summary
 nowcast/
   features.py   checkpoint rows: what was known at week k of a quarter, and the outcome

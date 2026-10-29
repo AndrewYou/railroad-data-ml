@@ -1,8 +1,13 @@
 """Dashboard entry point: page setup shared by both pages, and the navigation between them.
 
-Run: streamlit run dashboard/main.py   (with the repo root on PYTHONPATH)
+Run: streamlit run dashboard/main.py
 """
+import sys
+from pathlib import Path
+
 import streamlit as st
+
+sys.path.insert(0, str(Path(__file__).parent.parent))  # repo root, for `rail` (Streamlit Cloud has no PYTHONPATH)
 
 import charts
 
