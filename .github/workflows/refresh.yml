@@ -1,10 +1,14 @@
 # Hosted pipeline: the worker's hourly watch, as a scheduled job against the hosted database.
 # Loads only when USDA has published new data (or nothing has loaded for 7 days); the first run backfills from 2017.
+# Every run applies sql/ first (db.init), so a push that changes it updates the hosted views and tables right away.
 # Needs repo secret DATABASE_URL. A failed load fails the job, and GitHub emails you.
 name: refresh
 on:
   schedule:
     - cron: "17 */4 * * *"  # every 4 hours
+  push:
+    branches: [main]
+    paths: ["sql/**"]
   workflow_dispatch:
 concurrency: refresh
 jobs:

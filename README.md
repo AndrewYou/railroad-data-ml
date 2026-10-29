@@ -53,7 +53,7 @@ The same code runs on free tiers, with no Docker:
 | Local | Hosted |
 |---|---|
 | `db` | [Neon](https://neon.tech) Postgres (free: 0.5 GB; the full load is ~265 MB) |
-| `worker` (hourly watch) | GitHub Actions, `.github/workflows/refresh.yml`: `python -m rail refresh` every 4 hours |
+| `worker` (hourly watch) | GitHub Actions, `.github/workflows/refresh.yml`: `python -m rail refresh` every 4 hours, and on pushes to `sql/` (applies schema and view changes) |
 | `dashboard` | [Streamlit Community Cloud](https://share.streamlit.io), `dashboard/main.py` |
 | Mailpit | the Actions run summary; a failed load fails the job and GitHub emails you |
 
