@@ -27,7 +27,8 @@ def underline(text: str) -> str:
 
 
 def toggle(container, options: list[str], key: str, default: str | None = None) -> str:
-    return container.segmented_control(key, options, default=default or options[0], required=True,
+    default = None if key in st.session_state else default or options[0]  # no default once the code may set it
+    return container.segmented_control(key, options, default=default, required=True,
                                        key=key, label_visibility="collapsed")
 
 
@@ -121,6 +122,11 @@ with map_col, st.container(border=True):
     st.caption(note)
     points = event.selection.points if layer == "Terminal Dwell" and event else []
     selected_terminal = (points[0]["customdata"][0], points[0]["customdata"][1]) if points else None
+    if selected_terminal != st.session_state.get("map_terminal"):  # a new click: show that terminal's dwell
+        st.session_state.map_terminal = selected_terminal
+        if selected_terminal:
+            st.session_state.service_view, st.session_state.service_metric = "Vs. History", "Terminal Dwell"
+            st.session_state.service_railroad = selected_terminal[0]
 
 with right_col:
     with st.container(border=True):
@@ -164,11 +170,12 @@ with service_col, st.container(border=True):
     label_to_measure = {v[0]: k for k, v in data.SERVICE_METRICS.items()}
     measure = label_to_measure[toggle(svc_metric_col, list(label_to_measure), "service_metric")]
     label, unit, higher_is_better = data.SERVICE_METRICS[measure]
+    show_terminal = bool(selected_terminal) and view == "Vs. History" and measure == "terminal_dwell"
     railroad = svc_rr_col.selectbox("Railroad", railroads, key="service_railroad", label_visibility="collapsed",
-                                    disabled=view != "Vs. History" or selected_terminal is not None)
+                                    disabled=view != "Vs. History" or show_terminal)
     svc = data.service().query("railroad in @railroads")
 
-    if selected_terminal:
+    if show_terminal:
         rr, terminal = selected_terminal
         series = data.terminal_dwell().query("railroad == @rr and terminal == @terminal")
         hist = data.by_week_of_year(series, "dwell_hours")
